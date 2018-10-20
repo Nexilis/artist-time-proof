@@ -4,7 +4,9 @@
   :license {:name "GNU GENERAL PUBLIC LICENSE Version 3"
             :url "https://www.gnu.org/licenses/gpl-3.0.en.html"}
   :dependencies [[org.clojure/clojure "1.9.0"]
-                 [org.clojure/tools.cli "0.3.5"]]
+                 [org.clojure/tools.cli "0.3.5"]
+                 [clj-http "3.9.1"]
+                 [proto-repl "0.3.1"]]
   :main ^:skip-aot artist-time-proof.core
   :target-path "target/%s"
   :profiles {:uberjar {:aot :all}})
