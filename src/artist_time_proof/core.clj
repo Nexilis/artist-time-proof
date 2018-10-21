@@ -16,5 +16,4 @@
 (defn -main [& args]
   (let [list-repositories-url (azure-url "git" "repositories" "4.1")
         basic-auth {:basic-auth [(auth :user) (auth :pass)]}]
-    (println
-      (client/get list-repositories-url basic-auth))))
+    (client/get list-repositories-url (merge basic-auth {:as :json}))))
