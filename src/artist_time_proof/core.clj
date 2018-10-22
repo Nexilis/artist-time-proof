@@ -20,7 +20,4 @@
     ((json/parse-string (:body (http-client/get url basic-auth)) true) :value)))
 
 (defn -main [& args]
-  (repositories))
-
-;; TOOD: continue here
-;; (filter #(:id %) (repositories))
+  (let [repo-ids (map :id (repositories))]))
