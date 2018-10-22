@@ -1,8 +1,8 @@
 (ns artist-time-proof.core
   (:require
     [artist-time-proof.conf :refer :all]
-    [clj-http.client :as client]
-    [clojure.tools.cli :as cli])
+    [clj-http.client :as http-client]
+    [cheshire.core :as json])
   (:gen-class))
 
 (defn- azure-url [area resource version]
@@ -13,7 +13,14 @@
     resource
     version))
 
+(def basic-auth {:basic-auth [(auth :user) (auth :pass)]})
+
+(defn- repositories []
+  (let [url (azure-url "git" "repositories" "4.1")]
+    ((json/parse-string (:body (http-client/get url basic-auth)) true) :value)))
+
 (defn -main [& args]
-  (let [list-repositories-url (azure-url "git" "repositories" "4.1")
-        basic-auth {:basic-auth [(auth :user) (auth :pass)]}]
-    (client/get list-repositories-url (merge basic-auth {:as :json}))))
+  (repositories))
+
+;; TOOD: continue here
+;; (filter #(:id %) (repositories))
