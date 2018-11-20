@@ -8,8 +8,8 @@
 
 (defn azure-url [resource query-params]
   (format azure-url-base
-          (azure-conifg :organization)
-          (azure-conifg :team-project)
+          (azure-config :organization)
+          (azure-config :team-project)
           resource
           query-params))
 

@@ -1,20 +1,15 @@
 (ns artist-time-proof.commits
   (:require
+    [artist-time-proof.conf :refer :all]
     [artist-time-proof.http :refer :all]
-    [artist-time-proof.repositories :refer :all]
-    [clj-time.core :as t]
-    [clj-time.format :as f]))
+    [artist-time-proof.repositories :refer :all]))
 
 ;https://dev.azure.com/{organization}/{project}/_apis/git/repositories/{repositoryId}/commits?searchCriteria.author={searchCriteria.author}&searchCriteria.toDate={searchCriteria.toDate}&searchCriteria.fromDate={searchCriteria.fromDate}&api-version=4.1
 
-(def from-date (f/unparse (f/formatters :date-time) (t/date-time 2018 10 01)))
-(def to-date (f/unparse (f/formatters :date-time) (t/date-time 2018 11 01)))
-(def git-author "Bartek Łukasik")
-
 (defn- get-commits-query-params []
-  (str "?searchCriteria.author=" git-author
-       "&searchCriteria.toDate=" to-date
-       "&searchCriteria.fromDate=" from-date
+  (str "?searchCriteria.author="   (azure-config :git-author)
+       "&searchCriteria.toDate="   (azure-config :to-date)
+       "&searchCriteria.fromDate=" (azure-config :from-date)
        "&api-version=4.1"))
 
 (defn- get-commits-url [repo-id]
