@@ -2,7 +2,10 @@
   (:require
     [artist-time-proof.conf :refer :all]
     [org.httpkit.client :as http]
-    [cheshire.core :as json])
+    [cheshire.core :as json]
+    [clj-time.core :as t]
+    [clj-time.format :as f]
+    [clojure.pprint :as pp])
   (:gen-class))
 
 ;; Configurations
@@ -12,6 +15,9 @@
     (azure-config :organization)))
 
 (def basic-auth {:basic-auth [(auth :user) (auth :pass)]})
+
+(def date-filter {:from-date (f/unparse (f/formatters :date-time) (t/date-time 2018 11 01))
+                  :to-date   (f/unparse (f/formatters :date-time) (t/date-time 2019 02 01))})
 
 
 ;; Commits
@@ -34,6 +40,10 @@
 
 (defn present-pull-requests [])
 
+(defn filter-pull-request [x]
+  (println x)
+  true)
+
 (defn get-pull-requests [user-id]
   (let [url (str azure-base-url "_apis/git/pullrequests")
         creator-opts (conj basic-auth {:query-params {:status    "All"
@@ -45,7 +55,9 @@
                                        [creator-opts reviewer-opts]))]
       (doseq [resp futures]
         ;; wait for server response synchronously
-        (println (-> @resp :opts :url) " status: " (:status @resp))))))
+        (println (-> @resp :opts :url) " status: " (:status @resp))
+        (let [response-body ((json/parse-string (-> @resp :body) true) :value)]
+          (pp/pprint response-body))))))
         ;; filter via dates and return list
 
 (defn get-user-id []
@@ -54,7 +66,7 @@
    (http/get url basic-auth
              (fn [{:keys [status headers body error]}]
                (let [decoded-body (json/parse-string body true)]
-                 (deliver promise-of-user-id (:id (:authenticatedUser decoded-body))))))
+                 (deliver promise-of-user-id (-> decoded-body :authenticatedUser :id)))))
    @promise-of-user-id))
 
 (defn load-pull-requests []
@@ -76,4 +88,3 @@
   (println "Evaluation started...")
   (load-all)
   (println "...evaluation ended"))
-  ;(time (Thread/sleep 2000)))
