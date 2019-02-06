@@ -15,13 +15,9 @@
     (azure-config :organization)))
 
 (def basic-auth {:basic-auth [(auth :user) (auth :pass)]})
-
-(def date-filter {:from-date (f/unparse (f/formatters :date-time) (t/date-time 2018 11 01))
-                  :to-date   (f/unparse (f/formatters :date-time) (t/date-time 2019 02 01))})
-
+(def date-range (t/interval (t/date-time 2019 1 1) (t/date-time 2019 1 4)))
 
 ;; Commits
-
 (defn present-commits [])
 
 (defn get-commits-from-single-repository [])
@@ -37,28 +33,34 @@
 
 
 ;; Pull Requests
-
 (defn present-pull-requests [])
 
-(defn filter-pull-request [x]
-  (println x)
-  true)
+(defn completed? [pr]
+  (= (:status pr) "completed"))
+
+(defn in-date-range? [date-time-string]
+  (t/within? date-range (f/parse date-time-string)))
+
+(defn filter-pull-requests [pr]
+  (if (completed? pr)
+    (in-date-range? (:closedDate pr))
+    (in-date-range? (:creationDate pr))))
 
 (defn get-pull-requests [user-id]
   (let [url (str azure-base-url "_apis/git/pullrequests")
         creator-opts (conj basic-auth {:query-params {:status    "All"
                                                       :creatorId user-id}})
-        reviewer-opts (conj basic-auth {:query-params {:status     "All",
+        reviewer-opts (conj basic-auth {:query-params {:status     "All"
                                                        :reviewerId user-id}})]
-
+    ;; send the request concurrently (asynchronously)
     (let [futures (doall (map http/get [url url]
                                        [creator-opts reviewer-opts]))]
       (doseq [resp futures]
         ;; wait for server response synchronously
-        (println (-> @resp :opts :url) " status: " (:status @resp))
-        (let [response-body ((json/parse-string (-> @resp :body) true) :value)]
-          (pp/pprint response-body))))))
-        ;; filter via dates and return list
+        (println "DEBUG Request" (-> @resp :opts :url) "ended with status:" (:status @resp))
+        (let [pull-requests ((json/parse-string (-> @resp :body) true) :value)]
+          (pp/pprint
+            (filter filter-pull-requests pull-requests)))))))
 
 (defn get-user-id []
  (let [url (str azure-base-url "_apis/connectionData")
@@ -71,7 +73,7 @@
 
 (defn load-pull-requests []
   (let [user-id (get-user-id)]
-    (println user-id)
+    (println "DEBUG user-id" user-id)
     ;then
     (get-pull-requests user-id)
     ;when all
@@ -85,6 +87,6 @@
 ;; Start
 
 (defn -main [& _]
-  (println "Evaluation started...")
+  (println "DEBUG Evaluation started")
   (load-all)
-  (println "...evaluation ended"))
+  (println "DEBUG Evaluation ended"))
