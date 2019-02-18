@@ -15,7 +15,8 @@
   (format "https://dev.azure.com/%s/"
     (azure-config :organization)))
 
-(def basic-auth {:basic-auth [(auth :user) (auth :pass)]})
+(def default-http-opts {:basic-auth [(auth :user) (auth :pass)]
+                        :async?            true})
 (def date-range (t/interval (t/date-time 2019 1 1) (t/date-time 2019 1 4)))
 
 
@@ -32,15 +33,25 @@
 
 (defn get-commits-from-single-repository [])
 
-(defn get-repositories [])
+(defn fetch-repositories [result-promise]
+  (let [url (str azure-base-url "_apis/git/repositories")]
+    (client/get url
+                default-http-opts
+                (fn [response]
+                  (let [decoded-body (json/parse-string (:body response) true)
+                        repo-ids     (map :id (decoded-body :value))]
+                    (deliver result-promise repo-ids)))
+                handle-exception)))
 
 (defn load-commits []
- (get-repositories)
- ;then for all repos
- (get-commits-from-single-repository)
- ;when all
- (present-commits))
-
+  (let [repo-ids-promise (promise)]
+    (fetch-repositories repo-ids-promise)
+    (println "DEBUG repo-ids")
+    (pp/pprint (deref repo-ids-promise))
+    ;then for all repos
+    (get-commits-from-single-repository)
+    ;when all
+    (present-commits)))
 
 ;; Pull Requests
 (defn present-pull-requests [responses]
@@ -66,13 +77,10 @@
 
 (defn fetch-pull-requests [user-id resp-channel]
   (let [url (str azure-base-url "_apis/git/pullrequests")
-        creator-opts (conj basic-auth {:query-params {:status    "All"
-                                                      :creatorId user-id}}
-                           {:async? true})
-
-        reviewer-opts (conj basic-auth {:query-params {:status     "All"
-                                                       :reviewerId user-id}}
-                            {:async? true})]
+        creator-opts  (conj default-http-opts {:query-params {:status     "All"
+                                                              :creatorId  user-id}})
+        reviewer-opts (conj default-http-opts {:query-params {:status     "All"
+                                                              :reviewerId user-id}})]
     (client/get url
                 creator-opts
                 (fn [response]
@@ -86,19 +94,24 @@
                                                (extract-value-from response)))))
                 handle-exception)))
 
-(defn fetch-user-id []
-  (let [url (str azure-base-url "_apis/connectionData")
-        response (:body (client/get url basic-auth))
-        decoded-body (json/parse-string response true)
-        user-id (-> decoded-body :authenticatedUser :id)]
-    user-id))
+(defn fetch-user-id [result-promise]
+  (let [url          (str azure-base-url "_apis/connectionData")]
+    (client/get url
+                default-http-opts
+                (fn [response]
+                  (let [decoded-body (json/parse-string (:body response) true)
+                        user-id (-> decoded-body :authenticatedUser :id)]
+                    (deliver result-promise user-id)))
+                handle-exception)))
 
 (defn load-pull-requests []
-  (let [user-id (fetch-user-id)
+  (let [user-id-promise (promise)
         pull-requests-channel (chan)]
-    (println "DEBUG user-id" user-id)
-    (fetch-pull-requests user-id pull-requests-channel)
-    (present-pull-requests pull-requests-channel)))
+    (fetch-user-id user-id-promise)
+    (let [user-id (deref user-id-promise)]
+      (println "DEBUG user-id" user-id)
+      (fetch-pull-requests user-id pull-requests-channel)
+      (present-pull-requests pull-requests-channel))))
 
 (defn load-all []
   (load-pull-requests)
