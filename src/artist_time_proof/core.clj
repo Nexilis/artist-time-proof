@@ -9,14 +9,16 @@
     [clojure.pprint :as pp])
   (:gen-class))
 
+(def pull-requests-chan (chan))
+(def commits-chan (chan))
 
 ;; Configurations
 (def azure-base-url
   (format "https://dev.azure.com/%s/"
-    (azure-config :organization)))
+          (azure-config :organization)))
 
 (def default-http-opts {:basic-auth [(auth :user) (auth :pass)]
-                        :async?            true})
+                        :async?     true})
 (def date-range (t/interval (t/date-time 2019 1 1) (t/date-time 2019 1 4)))
 
 
@@ -29,17 +31,23 @@
 
 
 ;; Commits
-(defn present-commits [])
+(defn fetch-commits [repo-ids]
+  (doseq [repo-id repo-ids]
+    (let [url (str azure-base-url "_apis/git/repositories/" repo-id "/commits")
+          opts default-http-opts]
+      (client/get url
+                  opts                                      ;; TODO: filter with dates and author
+                  (fn [response] (go (>! commits-chan (extract-value-from response))))
+                  handle-exception))))
 
-(defn get-commits-from-single-repository [])
 
 (defn fetch-repositories [result-promise]
   (let [url (str azure-base-url "_apis/git/repositories")]
     (client/get url
-                default-http-opts
+                default-http-opts                           ;; TODO: includeHidden: true, includeLinks: false, consider handling paging
                 (fn [response]
                   (let [decoded-body (json/parse-string (:body response) true)
-                        repo-ids     (map :id (decoded-body :value))]
+                        repo-ids (map :id (decoded-body :value))]
                     (deliver result-promise repo-ids)))
                 handle-exception)))
 
@@ -47,23 +55,10 @@
   (let [repo-ids-promise (promise)]
     (fetch-repositories repo-ids-promise)
     (println "DEBUG repo-ids")
-    (pp/pprint (deref repo-ids-promise))
-    ;then for all repos
-    (get-commits-from-single-repository)
-    ;when all
-    (present-commits)))
+    (let [repo-ids (deref repo-ids-promise)]
+      (fetch-commits repo-ids))))
 
 ;; Pull Requests
-(defn present-pull-requests [responses]
-  (<!! (go
-         (let [creator-resp (<! responses)
-               reviewer-resp (<! responses)]
-           (println "DEBUG creator-resp")
-           (pp/pprint creator-resp)
-           (println "DEBUG reviewer-resp")
-           (pp/pprint reviewer-resp))))
-  (close! responses))
-
 (defn completed? [pr]
   (= (:status pr) "completed"))
 
@@ -75,27 +70,27 @@
     (in-date-range? (:closedDate pr))
     (in-date-range? (:creationDate pr))))
 
-(defn fetch-pull-requests [user-id resp-channel]
+(defn fetch-pull-requests [user-id]
   (let [url (str azure-base-url "_apis/git/pullrequests")
-        creator-opts  (conj default-http-opts {:query-params {:status     "All"
-                                                              :creatorId  user-id}})
+        creator-opts (conj default-http-opts {:query-params {:status    "All"
+                                                             :creatorId user-id}})
         reviewer-opts (conj default-http-opts {:query-params {:status     "All"
                                                               :reviewerId user-id}})]
     (client/get url
                 creator-opts
                 (fn [response]
-                  (go (>! resp-channel (filter filter-pull-requests
-                                               (extract-value-from response)))))
+                  (go (>! pull-requests-chan (filter filter-pull-requests
+                                                     (extract-value-from response)))))
                 handle-exception)
     (client/get url
                 reviewer-opts
                 (fn [response]
-                  (go (>! resp-channel (filter filter-pull-requests
-                                               (extract-value-from response)))))
+                  (go (>! pull-requests-chan (filter filter-pull-requests
+                                                     (extract-value-from response)))))
                 handle-exception)))
 
 (defn fetch-user-id [result-promise]
-  (let [url          (str azure-base-url "_apis/connectionData")]
+  (let [url (str azure-base-url "_apis/connectionData")]
     (client/get url
                 default-http-opts
                 (fn [response]
@@ -105,20 +100,33 @@
                 handle-exception)))
 
 (defn load-pull-requests []
-  (let [user-id-promise (promise)
-        pull-requests-channel (chan)]
+  (let [user-id-promise (promise)]
     (fetch-user-id user-id-promise)
     (let [user-id (deref user-id-promise)]
       (println "DEBUG user-id" user-id)
-      (fetch-pull-requests user-id pull-requests-channel)
-      (present-pull-requests pull-requests-channel))))
+      (fetch-pull-requests user-id))))
+
+;; Main
+(defn present-results []
+  (<!! (go
+         (dotimes [_ 2]
+           (let [pull-requests (<! pull-requests-chan)]
+             (println "DEBUG Present Pull Requests")
+             (println pull-requests)))
+         (close! pull-requests-chan)
+         (dotimes [_ 50]                                    ;; assuming that there are no more than 50 repositories, TODO: replace with smth smarter
+           (let [commits (<! commits-chan)]
+             (println "DEBUG Present Commits")
+             (println commits)))
+         (close! commits-chan))))
 
 (defn load-all []
-  (load-pull-requests)
-  (load-commits))
+  (go
+    (load-pull-requests))
+  (go
+    (load-commits))
+  (present-results))
 
-
-;; Start
 (defn -main [& _]
   (println "DEBUG Evaluation started")
   (time (load-all))
