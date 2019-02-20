@@ -9,6 +9,7 @@
                  [cheshire "5.8.1"]
                  [clj-time "0.15.1"]
                  [clj-http "3.9.1"]
+                 [clj-pdf "2.3.1"]
                  [proto-repl "0.3.1"]]
   :main ^:skip-aot artist-time-proof.core
   :target-path "target/%s"

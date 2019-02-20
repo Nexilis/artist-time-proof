@@ -6,6 +6,7 @@
     [cheshire.core :as json]
     [clj-time.core :as t]
     [clj-time.format :as f]
+    [clj-pdf.core :as pdf]
     [clojure.pprint :as pp])
   (:gen-class))
 
@@ -107,27 +108,39 @@
       (fetch-pull-requests user-id))))
 
 ;; Main
-(defn present-results []
+(defn present-results [present-completion]
   (<!! (go
-         (dotimes [_ 2]
-           (let [pull-requests (<! pull-requests-chan)]
-             (println "DEBUG Present Pull Requests")
-             (println pull-requests)))
-         (close! pull-requests-chan)
-         (dotimes [_ 50]                                    ;; assuming that there are no more than 50 repositories, TODO: replace with smth smarter
-           (let [commits (<! commits-chan)]
-             (println "DEBUG Present Commits")
-             (println commits)))
-         (close! commits-chan))))
+         (pdf/pdf
+           [{:title "Artist Time Proof"
+             :size "a4"
+             :footer "page"
+             :left-margin   15
+             :right-margin  15
+             :top-margin    20
+             :bottom-margin 20}
+            [:chapter "TEST"]
+            [:paragraph "test"]
+            [:chapter "PULL REQUESTS"]
+            (dotimes [_ 2]
+              [:paragraph (str (<! pull-requests-chan))])
+            (close! pull-requests-chan)
+            [:chapter "COMMITS"]
+            (dotimes [_ 50]                                    ;; assuming that there are no more than 50 repositories, TODO: replace with smth smarter
+              [:paragraph (str (<! commits-chan))])
+            (close! commits-chan)]
+           (str "artist-time-proof" (f/unparse (f/formatters :date-time) (t/now)) ".pdf"))
+         (deliver present-completion true))))
 
 (defn load-all []
   (go
     (load-pull-requests))
   (go
     (load-commits))
-  (present-results))
+  (let [present-completion (promise)]
+    (present-results present-completion)
+    (if (deref present-completion) (println "DEBUG Document generation done"))))
 
 (defn -main [& _]
-  (println "DEBUG Evaluation started")
+  (println "DEBUG Program start")
   (time (load-all))
-  (println "DEBUG Evaluation ended"))
+  (println "DEBUG Program end"))
