@@ -10,7 +10,7 @@
     [clojure.pprint :as pp])
   (:gen-class))
 
-(def pull-requests-chan (chan))
+(def pull-requests-chan (chan 2))
 (def commits-chan (chan))
 
 ;; Configurations
@@ -39,7 +39,7 @@
       (client/get url
                   ;; TODO: filter with dates and author
                   opts
-                  (fn [response] (go (>! commits-chan (extract-value-from response))))
+                  (fn [response] (put! commits-chan (extract-value-from response)))
                   handle-exception))))
 
 
@@ -79,17 +79,19 @@
                                                              :creatorId user-id}})
         reviewer-opts (conj default-http-opts {:query-params {:status     "All"
                                                               :reviewerId user-id}})]
+    ;; TODO: close the channel here!
+    ;; TODO: remove duplication, eg. https://www.clojure.org/guides/core_async_go
     (client/get url
                 creator-opts
                 (fn [response]
-                  (go (>! pull-requests-chan (filter filter-pull-requests
-                                                     (extract-value-from response)))))
+                  (put! pull-requests-chan (filter filter-pull-requests
+                                                   (extract-value-from response))))
                 handle-exception)
     (client/get url
                 reviewer-opts
                 (fn [response]
-                  (go (>! pull-requests-chan (filter filter-pull-requests
-                                                     (extract-value-from response)))))
+                  (put! pull-requests-chan (filter filter-pull-requests
+                                                   (extract-value-from response))))
                 handle-exception)))
 
 (defn fetch-user-id [result-promise]
@@ -110,13 +112,30 @@
       (fetch-pull-requests user-id))))
 
 ;; Main
-(defn build-pull-request-chapter []
-  (loop [pull-requests (<!! pull-requests-chan)
-         result [[:chapter "PULL REQUESTS"]]]
-    (if pull-requests
-      ;; TODO: fix next few lines // construct chapter in the correct way
-      (let [updated-result (conj result [:paragraph (str pull-requests)])]
-        (recur (<!! pull-requests-chan) updated-result))
+(defn build-pr-paragraph [pr]
+  (let [pr-repo-name (:repository :name pr)
+        pr-id (:pullRequestId pr)
+        pr-url (:url pr)
+        pr-title (:title pr)
+        pr-created (:creationDate pr)
+        pr-closed (:closedDate pr)]
+    [[:paragraph
+      [:phrase (str "(" pr-id ")")]
+      [:anchor {:target pr-url} pr-title]]
+     [:paragraph
+      [:phrase (str "Created: " pr-created " | Closed: " pr-closed)]]]))
+
+(defn build-pr-chapter []
+  (loop [result [[:chapter "PULL REQUESTS"]]
+         chan-read-count 1]
+    (if (< chan-read-count 3)
+      (let [pr-seq (<!! pull-requests-chan)
+            ;; TODO: probably map should be replaced with reduce
+            single-pr (doall (map build-pr-paragraph pr-seq))
+            updated-result (conj result single-pr)]
+        (println "iteration")
+        (if (= chan-read-count 2) (close! pull-requests-chan))
+        (recur updated-result (inc chan-read-count)))
       result)))
 
 (defn build-commits-chapter []
@@ -129,17 +148,16 @@
       result)))
 
 (defn present-results []
-  (let [pdf-body
-        ;; TODO: do something lik (conj (build-commits-chapter)) // fix how pdf-body is created
-        (conj (build-pull-request-chapter)
-              [{:title "Artist Time Proof"
-                :size "a4"
-                :footer "page"
-                :left-margin   15
-                :right-margin  15
-                :top-margin    20
-                :bottom-margin 20}])
+  (let [pdf-config [{:title "Artist Time Proof"
+                     :size "a4"
+                     :footer "page"
+                     :left-margin   15
+                     :right-margin  15
+                     :top-margin    20
+                     :bottom-margin 20}]
+        pdf-body (build-pr-chapter)
         file-name (str "artist-time-proof" (f/unparse (f/formatters :date-time) (t/now)) ".pdf")]
+    (pp/pprint pdf-body)
     (pdf/pdf pdf-body file-name)))
 
 (defn load-all []
