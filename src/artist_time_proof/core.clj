@@ -37,7 +37,8 @@
     (let [url (str azure-base-url "_apis/git/repositories/" repo-id "/commits")
           opts default-http-opts]
       (client/get url
-                  opts                                      ;; TODO: filter with dates and author
+                  ;; TODO: filter with dates and author
+                  opts
                   (fn [response] (go (>! commits-chan (extract-value-from response))))
                   handle-exception))))
 
@@ -45,7 +46,8 @@
 (defn fetch-repositories [result-promise]
   (let [url (str azure-base-url "_apis/git/repositories")]
     (client/get url
-                default-http-opts                           ;; TODO: includeHidden: true, includeLinks: false, consider handling paging
+                ;; TODO: includeHidden: true, includeLinks: false, consider handling paging
+                default-http-opts
                 (fn [response]
                   (let [decoded-body (json/parse-string (:body response) true)
                         repo-ids (map :id (decoded-body :value))]
@@ -108,37 +110,45 @@
       (fetch-pull-requests user-id))))
 
 ;; Main
-(defn present-results [present-completion]
-  (<!! (go
-         (pdf/pdf
-           [{:title "Artist Time Proof"
-             :size "a4"
-             :footer "page"
-             :left-margin   15
-             :right-margin  15
-             :top-margin    20
-             :bottom-margin 20}
-            [:chapter "TEST"]
-            [:paragraph "test"]
-            [:chapter "PULL REQUESTS"]
-            (dotimes [_ 2]
-              [:paragraph (str (<! pull-requests-chan))])
-            (close! pull-requests-chan)
-            [:chapter "COMMITS"]
-            (dotimes [_ 50]                                    ;; assuming that there are no more than 50 repositories, TODO: replace with smth smarter
-              [:paragraph (str (<! commits-chan))])
-            (close! commits-chan)]
-           (str "artist-time-proof" (f/unparse (f/formatters :date-time) (t/now)) ".pdf"))
-         (deliver present-completion true))))
+(defn build-pull-request-chapter []
+  (loop [pull-requests (<!! pull-requests-chan)
+         result [[:chapter "PULL REQUESTS"]]]
+    (if pull-requests
+      ;; TODO: fix next few lines // construct chapter in the correct way
+      (let [updated-result (conj result [:paragraph (str pull-requests)])]
+        (recur (<!! pull-requests-chan) updated-result))
+      result)))
+
+(defn build-commits-chapter []
+  (loop [commits (<!! commits-chan)
+         result [[:chapter "COMMITS"]]]
+    (if commits
+      ;; TODO: fix next few lines // construct chapter in the correct way
+      (let [updated-result (conj result [:paragraph (str commits)])]
+        (recur (<!! commits-chan) updated-result))
+      result)))
+
+(defn present-results []
+  (let [pdf-body
+        ;; TODO: do something lik (conj (build-commits-chapter)) // fix how pdf-body is created
+        (conj (build-pull-request-chapter)
+              [{:title "Artist Time Proof"
+                :size "a4"
+                :footer "page"
+                :left-margin   15
+                :right-margin  15
+                :top-margin    20
+                :bottom-margin 20}])
+        file-name (str "artist-time-proof" (f/unparse (f/formatters :date-time) (t/now)) ".pdf")]
+    (pdf/pdf pdf-body file-name)))
 
 (defn load-all []
   (go
     (load-pull-requests))
   (go
     (load-commits))
-  (let [present-completion (promise)]
-    (present-results present-completion)
-    (if (deref present-completion) (println "DEBUG Document generation done"))))
+  (present-results)
+  (println "DEBUG Document generation done"))
 
 (defn -main [& _]
   (println "DEBUG Program start")
