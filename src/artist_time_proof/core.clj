@@ -13,6 +13,21 @@
 (def pull-requests-chan (chan 2))
 (def commits-chan (chan))
 
+
+(defn flatten-1
+  "Flattens only the first level of a given sequence, e.g. [[1 2][3]] becomes
+   [1 2 3], but [[1 [2]] [3]] becomes [1 [2] 3]."
+  [seq]
+  (if (or (not (seqable? seq)) (nil? seq))
+    seq ; if seq is nil or not a sequence, don't do anything
+    (loop [acc [] [elt & others] seq]
+      (if (nil? elt) acc
+                     (recur
+                       (if (seqable? elt)
+                         (apply conj acc elt) ; if elt is a sequence, add each element of elt
+                         (conj acc elt))      ; if elt is not a sequence, add elt itself
+                       others)))))
+
 ;; Configurations
 (def azure-base-url
   (format "https://dev.azure.com/%s/"
@@ -126,17 +141,18 @@
       [:phrase (str "Created: " pr-created " | Closed: " pr-closed)]]]))
 
 (defn build-pr-chapter []
-  (loop [result [[:chapter "PULL REQUESTS"]]
+  (loop [result []
          chan-read-count 1]
     (if (< chan-read-count 3)
       (let [pr-seq (<!! pull-requests-chan)
-            ;; TODO: probably map should be replaced with reduce
-            single-pr (doall (map build-pr-paragraph pr-seq))
-            updated-result (conj result single-pr)]
-        (println "iteration")
+            prs-from-one-repository (doall (reduce (fn [accumulator x]
+                                                     (conj accumulator (build-pr-paragraph x)))
+                                                   []
+                                                   pr-seq))
+            updated-result (conj result prs-from-one-repository)]
         (if (= chan-read-count 2) (close! pull-requests-chan))
         (recur updated-result (inc chan-read-count)))
-      result)))
+      (flatten-1 (flatten-1 result)))))
 
 (defn build-commits-chapter []
   (loop [commits (<!! commits-chan)
@@ -156,9 +172,11 @@
                      :top-margin    20
                      :bottom-margin 20}]
         pdf-body (build-pr-chapter)
+        pdf-whole (conj pdf-config pdf-body)
         file-name (str "artist-time-proof" (f/unparse (f/formatters :date-time) (t/now)) ".pdf")]
-    (pp/pprint pdf-body)
-    (pdf/pdf pdf-body file-name)))
+    (println "DEBUG pdf-whole")
+    (pp/pprint pdf-whole)
+    (pdf/pdf pdf-whole file-name)))
 
 (defn load-all []
   (go
