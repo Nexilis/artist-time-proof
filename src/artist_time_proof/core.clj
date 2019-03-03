@@ -28,6 +28,14 @@
                          (conj acc elt))      ; if elt is not a sequence, add elt itself
                        others)))))
 
+(defn take-or-timeout!! [channel]
+  "Takes data from a channel or timeouts after 2 seconds."
+  (let [[take-result take-source] (alts!! [channel (timeout 2000)])]
+    (if take-result
+      (println "DEBUG taken from channel" take-source)
+      (println "DEBUG channel timeout"))
+    take-result))
+
 ;; Configurations
 (def azure-base-url
   (format "https://dev.azure.com/%s/"
@@ -57,17 +65,17 @@
                   (fn [response] (put! commits-chan (extract-value-from response)))
                   handle-exception))))
 
+(def url-repositories (str azure-base-url "_apis/git/repositories"))
 
 (defn fetch-repositories [result-promise]
-  (let [url (str azure-base-url "_apis/git/repositories")]
-    (client/get url
-                ;; TODO: includeHidden: true, includeLinks: false, consider handling paging
-                default-http-opts
-                (fn [response]
-                  (let [decoded-body (json/parse-string (:body response) true)
-                        repo-ids (map :id (decoded-body :value))]
-                    (deliver result-promise repo-ids)))
-                handle-exception)))
+  (client/get url-repositories
+              ;; TODO: includeHidden: true, includeLinks: false, consider handling paging
+              default-http-opts
+              (fn [response]
+                (let [decoded-body (json/parse-string (:body response) true)
+                      repo-ids (map :id (decoded-body :value))]
+                  (deliver result-promise repo-ids)))
+              handle-exception))
 
 (defn load-commits []
   (let [repo-ids-promise (promise)]
@@ -88,36 +96,30 @@
     (in-date-range? (:closedDate pr))
     (in-date-range? (:creationDate pr))))
 
+(def url-pull-requests (str azure-base-url "_apis/git/pullrequests"))
+
+(defn single-pull-request-fetch [options]
+  (client/get url-pull-requests
+              options
+              (fn [response] (put! pull-requests-chan (filter filter-pull-requests (extract-value-from response))))
+              handle-exception))
+
 (defn fetch-pull-requests [user-id]
-  (let [url (str azure-base-url "_apis/git/pullrequests")
-        creator-opts (conj default-http-opts {:query-params {:status    "All"
-                                                             :creatorId user-id}})
-        reviewer-opts (conj default-http-opts {:query-params {:status     "All"
-                                                              :reviewerId user-id}})]
-    ;; TODO: close the channel here!
-    ;; TODO: remove duplication, eg. https://www.clojure.org/guides/core_async_go
-    (client/get url
-                creator-opts
-                (fn [response]
-                  (put! pull-requests-chan (filter filter-pull-requests
-                                                   (extract-value-from response))))
-                handle-exception)
-    (client/get url
-                reviewer-opts
-                (fn [response]
-                  (put! pull-requests-chan (filter filter-pull-requests
-                                                   (extract-value-from response))))
-                handle-exception)))
+  (let [options [(conj default-http-opts {:query-params {:status "All" :creatorId user-id}})
+                 (conj default-http-opts {:query-params {:status "All" :reviewerId user-id}})]]
+    ;; https://stackoverflow.com/questions/46984111/closing-a-channel-at-the-producer-end-when-all-the-jobs-are-finished
+    (doall (map single-pull-request-fetch options))))
+
+(def url-user-id (str azure-base-url "_apis/connectionData"))
 
 (defn fetch-user-id [result-promise]
-  (let [url (str azure-base-url "_apis/connectionData")]
-    (client/get url
-                default-http-opts
-                (fn [response]
-                  (let [decoded-body (json/parse-string (:body response) true)
-                        user-id (-> decoded-body :authenticatedUser :id)]
-                    (deliver result-promise user-id)))
-                handle-exception)))
+  (client/get url-user-id
+              default-http-opts
+              (fn [response]
+                (let [decoded-body (json/parse-string (:body response) true)
+                      user-id (-> decoded-body :authenticatedUser :id)]
+                  (deliver result-promise user-id)))
+              handle-exception))
 
 (defn load-pull-requests []
   (let [user-id-promise (promise)]
@@ -136,7 +138,10 @@
         pr-closed (:closedDate pr)]
     [[:paragraph
       [:phrase (str "(" pr-id ")")]
-      [:anchor {:target pr-url} pr-title]]
+      [:anchor
+         {:style {:color [0 0 200]}
+          :target pr-url}
+         pr-title]]
      [:paragraph
       [:phrase (str "Created: " pr-created " | Closed: " pr-closed)]]]))
 
@@ -144,7 +149,7 @@
   (loop [result []
          chan-read-count 1]
     (if (< chan-read-count 3)
-      (let [pr-seq (<!! pull-requests-chan)
+      (let [pr-seq (take-or-timeout!! pull-requests-chan)
             prs-from-one-repository (doall (reduce (fn [accumulator x]
                                                      (conj accumulator (build-pr-paragraph x)))
                                                    []
@@ -163,19 +168,21 @@
         (recur (<!! commits-chan) updated-result))
       result)))
 
+(def pdf-config [{:title "Artist Time Proof"
+                  :size "a4"
+                  :footer "page"
+                  :left-margin   15
+                  :right-margin  15
+                  :top-margin    20
+                  :bottom-margin 20}])
+
+(def file-name (str "artist-time-proof" (f/unparse (f/formatters :date-time) (t/now)) ".pdf"))
+
 (defn present-results []
-  (let [pdf-config [{:title "Artist Time Proof"
-                     :size "a4"
-                     :footer "page"
-                     :left-margin   15
-                     :right-margin  15
-                     :top-margin    20
-                     :bottom-margin 20}]
-        pdf-body (build-pr-chapter)
-        pdf-whole (conj pdf-config pdf-body)
-        file-name (str "artist-time-proof" (f/unparse (f/formatters :date-time) (t/now)) ".pdf")]
+  (let [pdf-body (build-pr-chapter)
+        pdf-whole (conj pdf-config pdf-body)]
     (println "DEBUG pdf-whole")
-    (pp/pprint pdf-whole)
+    ;(pp/pprint pdf-whole)
     (pdf/pdf pdf-whole file-name)))
 
 (defn load-all []
