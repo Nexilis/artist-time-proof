@@ -43,8 +43,8 @@
 
 (def default-http-opts {:basic-auth [(auth :user) (auth :pass)]
                         :async?     true})
-(def date-range (t/interval (t/date-time 2019 1 1) (t/date-time 2019 1 4)))
-
+(def date-range (t/interval (t/minus (t/now) (t/months 1))
+                            (t/now)))
 
 ;; HTTP
 (defn handle-exception [exception]
@@ -98,16 +98,35 @@
 
 (def url-pull-requests (str azure-base-url "_apis/git/pullrequests"))
 
+(def pull-requests-response-count (atom 0))
+
+(defn close-pull-requests-chan! [callback-no]
+  (close! pull-requests-chan)
+  (println "DEBUG closed pull-requests-chan in callback no" callback-no))
+
+(defn put-on-pull-requests-chan! [response callback-no]
+  (put! pull-requests-chan
+        (filter filter-pull-requests
+                (extract-value-from response)))
+  (println "DEBUG put on pull-requests-chan in callback no" callback-no))
+
+(defn handle-prs-fetch-success [response]
+  (swap! pull-requests-response-count inc)
+  (let [callback-no (deref pull-requests-response-count)]
+    (println "DEBUG pull request callback no" callback-no)
+    (put-on-pull-requests-chan! response callback-no)
+    (if (= callback-no 2)
+      (close-pull-requests-chan! callback-no))))
+
 (defn single-pull-request-fetch [options]
   (client/get url-pull-requests
               options
-              (fn [response] (put! pull-requests-chan (filter filter-pull-requests (extract-value-from response))))
+              handle-prs-fetch-success
               handle-exception))
 
 (defn fetch-pull-requests [user-id]
   (let [options [(conj default-http-opts {:query-params {:status "All" :creatorId user-id}})
                  (conj default-http-opts {:query-params {:status "All" :reviewerId user-id}})]]
-    ;; https://stackoverflow.com/questions/46984111/closing-a-channel-at-the-producer-end-when-all-the-jobs-are-finished
     (doall (map single-pull-request-fetch options))))
 
 (def url-user-id (str azure-base-url "_apis/connectionData"))
@@ -137,7 +156,7 @@
         pr-created (:creationDate pr)
         pr-closed (:closedDate pr)]
     [[:paragraph
-      [:phrase (str "(" pr-id ")")]
+      [:phrase (str "(" pr-id ") ")]
       [:anchor
          {:style {:color [0 0 200]}
           :target pr-url}
@@ -146,18 +165,20 @@
       [:phrase (str "Created: " pr-created " | Closed: " pr-closed)]]]))
 
 (defn build-pr-chapter []
-  (loop [result []
-         chan-read-count 1]
-    (if (< chan-read-count 3)
-      (let [pr-seq (take-or-timeout!! pull-requests-chan)
-            prs-from-one-repository (doall (reduce (fn [accumulator x]
-                                                     (conj accumulator (build-pr-paragraph x)))
-                                                   []
-                                                   pr-seq))
-            updated-result (conj result prs-from-one-repository)]
-        (if (= chan-read-count 2) (close! pull-requests-chan))
-        (recur updated-result (inc chan-read-count)))
-      (flatten-1 (flatten-1 result)))))
+  (loop [result []]
+    (let [pr-seq (take-or-timeout!! pull-requests-chan)]
+      (if pr-seq
+        (let [prs-from-one-repository
+              (doall
+                (reduce
+                  (fn [accumulator x]
+                    (conj accumulator (build-pr-paragraph x)))
+                  []
+                  pr-seq))
+              updated-result
+              (conj result prs-from-one-repository)]
+          (recur updated-result))
+        (flatten-1 (flatten-1 result))))))
 
 (defn build-commits-chapter []
   (loop [commits (<!! commits-chan)
@@ -171,10 +192,10 @@
 (def pdf-config [{:title "Artist Time Proof"
                   :size "a4"
                   :footer "page"
-                  :left-margin   15
-                  :right-margin  15
-                  :top-margin    20
-                  :bottom-margin 20}])
+                  :left-margin   25
+                  :right-margin  25
+                  :top-margin    35
+                  :bottom-margin 35}])
 
 (def file-name (str "artist-time-proof" (f/unparse (f/formatters :date-time) (t/now)) ".pdf"))
 
