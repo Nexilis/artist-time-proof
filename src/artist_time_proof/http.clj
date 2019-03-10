@@ -2,7 +2,11 @@
   (:require
     [artist-time-proof.conf :refer :all]
     [cheshire.core :as json]
-    [clj-time.core :as t]))
+    [clj-time.core :as t]
+    [taoensso.timbre :as timbre
+     :refer [log trace debug info warn error fatal report
+             logf tracef debugf infof warnf errorf fatalf reportf
+             spy get-env]]))
 
 (def url-dev-azure-org
   (format "https://dev.azure.com/%s/"
@@ -22,7 +26,7 @@
   (str url-dev-azure-org "_apis/git/repositories/" repo-id "/commits"))
 
 (defn handle-exception [exception]
-  (println "DEBUG ERROR" exception))
+  (error exception))
 
 (defn extract-value-from [response]
   ((json/parse-string (:body response) true) :value))

@@ -3,16 +3,19 @@
     [artist-time-proof.pull-requests :refer :all]
     [artist-time-proof.commits :refer :all]
     [artist-time-proof.pdf-generation :refer :all]
-    [clojure.core.async :refer :all :exclude [map into reduce merge take transduce partition partition-by]])
+    [clojure.core.async :refer :all :exclude [map into reduce merge take transduce partition partition-by]]
+    [taoensso.timbre :as timbre
+     :refer [log trace debug info warn error fatal report
+             logf tracef debugf infof warnf errorf fatalf reportf
+             spy get-env]])
   (:gen-class))
 
 (defn load-all []
   (go (load-pull-requests))
   (go (load-commits))
-  (present-results)
-  (println "DEBUG Document generation done"))
+  (present-results))
 
 (defn -main [& _]
-  (println "DEBUG Program start")
+  (info "Program START")
   (time (load-all))
-  (println "DEBUG Program end"))
+  (info "Program END"))

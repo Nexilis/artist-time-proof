@@ -6,7 +6,11 @@
     [clj-time.core :as t]
     [clj-time.format :as f]
     [clj-pdf.core :as pdf]
-    [clojure.pprint :as pp]))
+    [clojure.pprint :as pp]
+    [taoensso.timbre :as timbre
+     :refer [log trace debug info warn error fatal report
+             logf tracef debugf infof warnf errorf fatalf reportf
+             spy get-env]]))
 
 (def pdf-config [{:title         "Artist Time Proof"
                   :size          "a4"
@@ -36,8 +40,8 @@
   "Takes data from a channel or timeouts after 2 seconds."
   (let [[take-result take-source] (alts!! [channel (timeout 2000)])]
     (if take-result
-      (println "DEBUG taken from channel" take-source)
-      (println "DEBUG channel timeout"))
+      (debug "taken from channel" take-source)
+      (debug "channel timeout"))
     take-result))
 
 (defn- build-commits-paragraph [pr]
@@ -111,5 +115,6 @@
         pdf-whole (conj pdf-config
                         pdf-body-prs
                         pdf-body-commits)]
-    (println "DEBUG Generating document")
-    (pdf/pdf pdf-whole pdf-file-name)))
+    (info "PDF generation START")
+    (time (pdf/pdf pdf-whole pdf-file-name))
+    (info "PDF generation END")))

@@ -5,7 +5,11 @@
     [cheshire.core :as json]
     [clj-http.client :as http]
     [clj-time.format :as f]
-    [clj-time.core :as t]))
+    [clj-time.core :as t]
+    [taoensso.timbre :as timbre
+     :refer [log trace debug info warn error fatal report
+             logf tracef debugf infof warnf errorf fatalf reportf
+             spy get-env]]))
 
 (def pull-requests-chan (chan 2))
 (def pull-requests-response-count (atom 0))
@@ -23,18 +27,18 @@
 
 (defn- close-pull-requests-chan! [callback-no]
   (close! pull-requests-chan)
-  (println "DEBUG closed pull-requests-chan in callback no" callback-no))
+  (debug "closed pull-requests-chan in callback no" callback-no))
 
 (defn- put-on-pull-requests-chan! [response callback-no]
   (put! pull-requests-chan
         (filter filter-pull-requests
                 (extract-value-from response)))
-  (println "DEBUG put on pull-requests-chan in callback no" callback-no))
+  (debug "put on pull-requests-chan in callback no" callback-no))
 
 (defn- handle-prs-fetch-success! [response]
   (swap! pull-requests-response-count inc)
   (let [callback-no (deref pull-requests-response-count)]
-    (println "DEBUG pull request callback no" callback-no)
+    (debug "pull request callback no" callback-no)
     (put-on-pull-requests-chan! response callback-no)
     (if (= callback-no 2)
       (close-pull-requests-chan! callback-no))))
@@ -63,5 +67,5 @@
   (let [user-id-promise (promise)]
     (fetch-user-id user-id-promise)
     (let [user-id (deref user-id-promise)]
-      (println "DEBUG user-id" user-id)
+      (info "user-id" user-id)
       (fetch-pull-requests user-id))))

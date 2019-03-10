@@ -2,14 +2,21 @@
   (:require
     [artist-time-proof.http :refer :all]
     [cheshire.core :as json]
-    [clj-http.client :as http]))
+    [clj-http.client :as http]
+    [taoensso.timbre :as timbre
+     :refer [log trace debug info warn error fatal report
+             logf tracef debugf infof warnf errorf fatalf reportf
+             spy get-env]]))
+
+(defn- handle-repositories-fetch-success! [response result-promise]
+  (let [decoded-body (json/parse-string (:body response) true)
+        repo-ids (map :id (decoded-body :value))]
+    (info "repos count" (count repo-ids))
+    (deliver result-promise repo-ids)))
 
 (defn fetch-repositories [result-promise]
   (http/get url-repositories
             ;; TODO: includeHidden: true, includeLinks: false, consider handling paging
             default-http-opts
-            (fn [response]
-              (let [decoded-body (json/parse-string (:body response) true)
-                    repo-ids (map :id (decoded-body :value))]
-                (deliver result-promise repo-ids)))
+            (fn [response] (handle-repositories-fetch-success! response result-promise))
             handle-exception))
