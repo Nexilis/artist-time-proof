@@ -22,6 +22,8 @@
 
 (def pdf-file-name (str "artist-time-proof" (f/unparse (f/formatters :date-time) (t/now)) ".pdf"))
 
+(def pdf-date-time-formatter (f/formatter "yyyy-MM-dd HH:MM"))
+
 (defn- flatten-1
   "Flattens only the first level of a given sequence, e.g. [[1 2][3]] becomes
    [1 2 3], but [[1 [2]] [3]] becomes [1 [2] 3]."
@@ -44,6 +46,9 @@
       (debug "timeout or closed" channel-name))
     take-result))
 
+(defn format-date-string-for-pdf [date-string]
+  (f/unparse pdf-date-time-formatter (f/parse date-string)))
+
 (defn- build-commits-paragraph [commit]
   (let [commit-id (:commitId commit)
         author (:author commit)
@@ -60,9 +65,12 @@
         :target remote-url}
        comment]]
      [:paragraph
-      [:phrase (str "Commit: " commit-id " | Date: " author-date)]]
+      [:phrase {:size 8}
+       (str "Commit: " commit-id
+            " | Date: " (format-date-string-for-pdf author-date))]]
      [:paragraph
-      [:phrase remote-url]]
+      [:phrase {:size 7}
+       remote-url]]
      [:spacer]]))
 
 (defn- build-commits-chapter []
@@ -106,15 +114,17 @@
         last-merge-commit (:lastMergeCommit pr)
         reviewers (:reviewers pr)]
     [[:paragraph
-      [:phrase (str "(" pull-request-id ") ")]
+      [:phrase (str "(#" pull-request-id ") ")]
       [:anchor
        {:style  {:color [0 0 200]}
         :target url}
        title]]
-     [:paragraph
-      [:phrase (str "Created: " creation-date
-                    (if closed-date (str " | Closed: " closed-date)))]]
-     [:paragraph
+     [:paragraph {:size 8}
+      [:phrase (str "Created: " (format-date-string-for-pdf creation-date)
+                    (if closed-date
+                      (str " | Closed: "
+                           (format-date-string-for-pdf closed-date))))]]
+     [:paragraph {:size 7}
       [:phrase url]]
      [:spacer]]))
 
