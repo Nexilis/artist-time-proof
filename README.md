@@ -7,6 +7,6 @@ A console app for delivering proof of creative work to comply with Polish Labor 
     $ java -jar artist-time-proof-0.1.0-standalone.jar [args]
 
 ## License
-Copyright © 2018 Bartek Łukasik
+Copyright © 2019 Bartek Łukasik
 
 Distributed under the GNU GENERAL PUBLIC LICENSE Version 3.

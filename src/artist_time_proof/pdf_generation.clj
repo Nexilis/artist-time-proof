@@ -8,8 +8,17 @@
     [clj-pdf.core :as pdf]
     [clojure.pprint :as pp]))
 
+(def pdf-config [{:title         "Artist Time Proof"
+                  :size          "a4"
+                  :footer        "page"
+                  :left-margin   25
+                  :right-margin  25
+                  :top-margin    35
+                  :bottom-margin 35}])
 
-(defn flatten-1
+(def pdf-file-name (str "artist-time-proof" (f/unparse (f/formatters :date-time) (t/now)) ".pdf"))
+
+(defn- flatten-1
   "Flattens only the first level of a given sequence, e.g. [[1 2][3]] becomes
    [1 2 3], but [[1 [2]] [3]] becomes [1 [2] 3]."
   [seq]
@@ -23,25 +32,7 @@
                          (conj acc elt))                    ; if elt is not a sequence, add elt itself
                        others)))))
 
-
-;; Main
-(defn build-pr-paragraph [pr]
-  (let [pr-repo-name (:repository :name pr)
-        pr-id (:pullRequestId pr)
-        pr-url (:url pr)
-        pr-title (:title pr)
-        pr-created (:creationDate pr)
-        pr-closed (:closedDate pr)]
-    [[:paragraph
-      [:phrase (str "(" pr-id ") ")]
-      [:anchor
-       {:style  {:color [0 0 200]}
-        :target pr-url}
-       pr-title]]
-     [:paragraph
-      [:phrase (str "Created: " pr-created " | Closed: " pr-closed)]]]))
-
-(defn take-or-timeout!! [channel]
+(defn- take-or-timeout!! [channel]
   "Takes data from a channel or timeouts after 2 seconds."
   (let [[take-result take-source] (alts!! [channel (timeout 2000)])]
     (if take-result
@@ -49,23 +40,7 @@
       (println "DEBUG channel timeout"))
     take-result))
 
-(defn build-pr-chapter []
-  (loop [result []]
-    (let [pr-seq (take-or-timeout!! pull-requests-chan)]
-      (if pr-seq
-        (let [prs-from-one-repo
-              (doall
-                (reduce
-                  (fn [accumulator x]
-                    (conj accumulator (build-pr-paragraph x)))
-                  []
-                  pr-seq))
-              updated-result
-              (conj result prs-from-one-repo)]
-          (recur updated-result))
-        (flatten-1 (flatten-1 result))))))
-
-(defn build-commits-paragraph [pr]
+(defn- build-commits-paragraph [pr]
   ;; TODO: build proper commits paragraph
   (let [pr-repo-name (:repository :name pr)
         pr-id (:pullRequestId pr)
@@ -82,7 +57,7 @@
      [:paragraph
       [:phrase (str "Created: " pr-created " | Closed: " pr-closed)]]]))
 
-(defn build-commits-chapter []
+(defn- build-commits-chapter []
   (loop [result []]
     (let [commits-seq (take-or-timeout!! commits-chan)]
       (if commits-seq
@@ -98,16 +73,37 @@
           (recur updated-result))
         (flatten-1 (flatten-1 result))))))
 
+(defn- build-pr-paragraph [pr]
+  (let [;pr-repo-name (:repository :name pr)
+        pr-id (:pullRequestId pr)
+        pr-url (:url pr)
+        pr-title (:title pr)
+        pr-created (:creationDate pr)
+        pr-closed (:closedDate pr)]
+    [[:paragraph
+      [:phrase (str "(" pr-id ") ")]
+      [:anchor
+       {:style  {:color [0 0 200]}
+        :target pr-url}
+       pr-title]]
+     [:paragraph
+      [:phrase (str "Created: " pr-created " | Closed: " pr-closed)]]]))
 
-(def pdf-config [{:title         "Artist Time Proof"
-                  :size          "a4"
-                  :footer        "page"
-                  :left-margin   25
-                  :right-margin  25
-                  :top-margin    35
-                  :bottom-margin 35}])
-
-(def file-name (str "artist-time-proof" (f/unparse (f/formatters :date-time) (t/now)) ".pdf"))
+(defn- build-pr-chapter []
+  (loop [result []]
+    (let [pr-seq (take-or-timeout!! pull-requests-chan)]
+      (if pr-seq
+        (let [prs-from-one-repo
+              (doall
+                (reduce
+                  (fn [accumulator x]
+                    (conj accumulator (build-pr-paragraph x)))
+                  []
+                  pr-seq))
+              updated-result
+              (conj result prs-from-one-repo)]
+          (recur updated-result))
+        (flatten-1 (flatten-1 result))))))
 
 (defn present-results []
   (let [pdf-body-prs (build-pr-chapter)
@@ -116,4 +112,4 @@
                         pdf-body-prs
                         pdf-body-commits)]
     (println "DEBUG Generating document")
-    (pdf/pdf pdf-whole file-name)))
+    (pdf/pdf pdf-whole pdf-file-name)))

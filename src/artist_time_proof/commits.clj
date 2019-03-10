@@ -27,9 +27,8 @@
 
 (defn- fetch-commits [repo-ids]
   (doseq [repo-id repo-ids]
-    (let [url (str azure-base-url "_apis/git/repositories/" repo-id "/commits")
-          repos-count (count repo-ids)]
-      (http/get url
+    (let [repos-count (count repo-ids)]
+      (http/get (url-commits repo-id)
                 default-http-opts                           ;; TODO: filter with dates and author
                 (fn [response] (handle-commits-fetch-success! response
                                                               repos-count))

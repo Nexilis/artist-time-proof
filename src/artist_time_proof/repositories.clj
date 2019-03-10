@@ -4,8 +4,6 @@
     [cheshire.core :as json]
     [clj-http.client :as http]))
 
-(def url-repositories (str azure-base-url "_apis/git/repositories"))
-
 (defn fetch-repositories [result-promise]
   (http/get url-repositories
             ;; TODO: includeHidden: true, includeLinks: false, consider handling paging

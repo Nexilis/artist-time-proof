@@ -7,36 +7,31 @@
     [clj-time.format :as f]
     [clj-time.core :as t]))
 
-;; https://docs.microsoft.com/en-us/rest/api/azure/devops/git/pull%20requests/get%20pull%20requests%20by%20project?view=azure-devops-rest-5.0
-
 (def pull-requests-chan (chan 2))
+(def pull-requests-response-count (atom 0))
 
-(defn completed? [pr]
+(defn- completed? [pr]
   (= (:status pr) "completed"))
 
-(defn in-date-range? [date-time-string]
+(defn- in-date-range? [date-time-string]
   (t/within? date-range (f/parse date-time-string)))
 
-(defn filter-pull-requests [pr]
+(defn- filter-pull-requests [pr]
   (if (completed? pr)
     (in-date-range? (:closedDate pr))
     (in-date-range? (:creationDate pr))))
 
-(def url-pull-requests (str azure-base-url "_apis/git/pullrequests"))
-
-(def pull-requests-response-count (atom 0))
-
-(defn close-pull-requests-chan! [callback-no]
+(defn- close-pull-requests-chan! [callback-no]
   (close! pull-requests-chan)
   (println "DEBUG closed pull-requests-chan in callback no" callback-no))
 
-(defn put-on-pull-requests-chan! [response callback-no]
+(defn- put-on-pull-requests-chan! [response callback-no]
   (put! pull-requests-chan
         (filter filter-pull-requests
                 (extract-value-from response)))
   (println "DEBUG put on pull-requests-chan in callback no" callback-no))
 
-(defn handle-prs-fetch-success! [response]
+(defn- handle-prs-fetch-success! [response]
   (swap! pull-requests-response-count inc)
   (let [callback-no (deref pull-requests-response-count)]
     (println "DEBUG pull request callback no" callback-no)
@@ -44,20 +39,18 @@
     (if (= callback-no 2)
       (close-pull-requests-chan! callback-no))))
 
-(defn single-pull-request-fetch [options]
+(defn- single-pull-request-fetch [options]
   (http/get url-pull-requests
             options
             handle-prs-fetch-success!
             handle-exception))
 
-(defn fetch-pull-requests [user-id]
+(defn- fetch-pull-requests [user-id]
   (let [options [(conj default-http-opts {:query-params {:status "All" :creatorId user-id}})
                  (conj default-http-opts {:query-params {:status "All" :reviewerId user-id}})]]
     (doall (map single-pull-request-fetch options))))
 
-(def url-user-id (str azure-base-url "_apis/connectionData"))
-
-(defn fetch-user-id [result-promise]
+(defn- fetch-user-id [result-promise]
   (http/get url-user-id
             default-http-opts
             (fn [response]
