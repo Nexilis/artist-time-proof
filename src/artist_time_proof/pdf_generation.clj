@@ -82,20 +82,40 @@
         (flatten-1 (flatten-1 result))))))
 
 (defn- build-pr-paragraph [pr]
-  (let [pr-repo-name (-> pr :repository :name)
-        pr-id (:pullRequestId pr)
-        pr-url (:url pr)
-        pr-title (:title pr)
-        pr-created (:creationDate pr)
-        pr-closed (:closedDate pr)]
+  (let [repository-name (-> pr :repository :name)
+        last-merge-source-commit (:lastMergeSourceCommit pr)
+        description (:description pr)
+        repository (:repository pr)
+        created-by (:createdBy pr)
+        completion-options (:completionOptions pr)
+        pull-request-id (:pullRequestId pr)
+        closed-date (:closedDate pr)
+        is-draft (:isDraft pr)
+        completion-queue-time (:completionQueueTime pr)
+        code-review-id (:codeReviewId pr)
+        merge-id (:mergeId pr)
+        supports-iterations (:supportsIterations pr)
+        title (:title pr)
+        target-ref-name (:targetRefName pr)
+        status (:status pr)
+        merge-status (:mergeStatus pr)
+        url (:url pr)
+        last-merge-target-commit (:lastMergeTargetCommit pr)
+        source-ref-name (:sourceRefName pr)
+        creation-date (:creationDate pr)
+        last-merge-commit (:lastMergeCommit pr)
+        reviewers (:reviewers pr)]
     [[:paragraph
-      [:phrase (str "(" pr-id ") ")]
+      [:phrase (str "(" pull-request-id ") ")]
       [:anchor
        {:style  {:color [0 0 200]}
-        :target pr-url}
-       pr-title]]
+        :target url}
+       title]]
      [:paragraph
-      [:phrase (str "Created: " pr-created " | Closed: " pr-closed)]]
+      [:phrase (str "Created: " creation-date
+                    (if closed-date (str " | Closed: " closed-date)))]]
+     [:paragraph
+      [:phrase url]]
      [:spacer]]))
 
 (defn- build-pr-chapter []
