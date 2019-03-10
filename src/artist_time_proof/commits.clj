@@ -34,10 +34,9 @@
   (doseq [repo-id repo-ids]
     (let [repos-count (count repo-ids)]
       (http/get (url-commits repo-id)
-                ;; TODO: fix dates
                 (conj default-http-opts {:query-params {:author   (auth :user)
-                                                        :fromDate "2019-02-10T11:58:05.000Z"
-                                                        :toDate   "2019-03-11T10:59:05.000Z"}})
+                                                        :fromDate (date-to-query-string-format month-ago)
+                                                        :toDate   (date-to-query-string-format today)}})
                 (fn [response] (handle-commits-fetch-success! response
                                                               repos-count))
                 handle-exception))))

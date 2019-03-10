@@ -18,7 +18,7 @@
   (= (:status pr) "completed"))
 
 (defn- in-date-range? [date-time-string]
-  (t/within? date-range (f/parse date-time-string)))
+  (t/within? last-month-range (f/parse date-time-string)))
 
 (defn- filter-pull-requests [pr]
   (if (completed? pr)

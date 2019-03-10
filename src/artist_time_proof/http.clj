@@ -3,6 +3,7 @@
     [artist-time-proof.conf :refer :all]
     [cheshire.core :as json]
     [clj-time.core :as t]
+    [clj-time.format :as f]
     [taoensso.timbre :as timbre
      :refer [log trace debug info warn error fatal report
              logf tracef debugf infof warnf errorf fatalf reportf
@@ -19,10 +20,16 @@
 (def default-http-opts {:basic-auth [(auth :user) (auth :pass)]
                         :async?     true})
 
-(def month-ago (t/minus (t/now)
+(def today (t/now))
+
+(def month-ago (t/minus today
                         (t/months 1)))
 
-(def date-range (t/interval month-ago (t/now)))
+(def last-month-range (t/interval month-ago today))
+
+(defn date-to-query-string-format [date]
+  (f/unparse
+    (f/formatters :date-time) date))
 
 (defn url-commits [repo-id]
   (str url-dev-azure-org "_apis/git/repositories/" repo-id "/commits"))
