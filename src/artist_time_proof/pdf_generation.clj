@@ -36,12 +36,12 @@
                          (conj acc elt))                    ; if elt is not a sequence, add elt itself
                        others)))))
 
-(defn- take-or-timeout!! [channel]
+(defn- take-or-timeout!! [channel channel-name]
   "Takes data from a channel or timeouts after 2 seconds."
   (let [[take-result take-source] (alts!! [channel (timeout 2000)])]
     (if take-result
-      (debug "taken from channel" take-source)
-      (debug "channel timeout"))
+      (debug "taken from" channel-name)
+      (debug "timeout or closed" channel-name))
     take-result))
 
 (defn- build-commits-paragraph [pr]
@@ -63,7 +63,7 @@
 
 (defn- build-commits-chapter []
   (loop [result []]
-    (let [commits-seq (take-or-timeout!! commits-chan)]
+    (let [commits-seq (take-or-timeout!! commits-chan (name `commits-chan))]
       (if commits-seq
         (let [commits-from-one-repo
               (doall
@@ -95,7 +95,7 @@
 
 (defn- build-pr-chapter []
   (loop [result []]
-    (let [pr-seq (take-or-timeout!! pull-requests-chan)]
+    (let [pr-seq (take-or-timeout!! pull-requests-chan (name `pull-requests-chan))]
       (if pr-seq
         (let [prs-from-one-repo
               (doall
