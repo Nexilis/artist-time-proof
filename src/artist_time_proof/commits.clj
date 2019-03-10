@@ -3,6 +3,7 @@
     [clojure.core.async :refer :all :exclude [map into reduce merge take transduce partition partition-by]]
     [artist-time-proof.http :refer :all]
     [artist-time-proof.repositories :refer :all]
+    [artist-time-proof.conf :refer :all]
     [clj-http.client :as http]
     [cheshire.core :as json]
     [taoensso.timbre :as timbre
@@ -33,7 +34,10 @@
   (doseq [repo-id repo-ids]
     (let [repos-count (count repo-ids)]
       (http/get (url-commits repo-id)
-                default-http-opts                           ;; TODO: filter with dates and author
+                ;; TODO: fix dates
+                (conj default-http-opts {:query-params {:author   (auth :user)
+                                                        :fromDate "2019-02-10T11:58:05.000Z"
+                                                        :toDate   "2019-03-11T10:59:05.000Z"}})
                 (fn [response] (handle-commits-fetch-success! response
                                                               repos-count))
                 handle-exception))))

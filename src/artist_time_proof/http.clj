@@ -19,8 +19,10 @@
 (def default-http-opts {:basic-auth [(auth :user) (auth :pass)]
                         :async?     true})
 
-(def date-range (t/interval (t/minus (t/now) (t/months 1))
-                            (t/now)))
+(def month-ago (t/minus (t/now)
+                        (t/months 1)))
+
+(def date-range (t/interval month-ago (t/now)))
 
 (defn url-commits [repo-id]
   (str url-dev-azure-org "_apis/git/repositories/" repo-id "/commits"))

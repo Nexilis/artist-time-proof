@@ -16,7 +16,7 @@
 
 (defn fetch-repositories [result-promise]
   (http/get url-repositories
-            ;; TODO: includeHidden: true, includeLinks: false, consider handling paging
-            default-http-opts
+            (conj default-http-opts {:query-params {:includeLinks  false
+                                                    :includeHidden true}})
             (fn [response] (handle-repositories-fetch-success! response result-promise))
             handle-exception))

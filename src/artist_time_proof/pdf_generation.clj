@@ -44,22 +44,26 @@
       (debug "timeout or closed" channel-name))
     take-result))
 
-(defn- build-commits-paragraph [pr]
-  ;; TODO: build proper commits paragraph
-  (let [pr-repo-name (:repository :name pr)
-        pr-id (:pullRequestId pr)
-        pr-url (:url pr)
-        pr-title (:title pr)
-        pr-created (:creationDate pr)
-        pr-closed (:closedDate pr)]
+(defn- build-commits-paragraph [commit]
+  (let [commit-id (:commitId commit)
+        author (:author commit)
+        author-date (-> commit :author :date)
+        committer (:committer commit)
+        comment (:comment commit)
+        comment-truncated (:commentTruncated commit)
+        changes-count (:changesCount commit)
+        url (:url commit)
+        remote-url (:remoteUrl commit)]
     [[:paragraph
-      [:phrase (str "(" pr-id ") ")]
       [:anchor
        {:style  {:color [0 0 200]}
-        :target pr-url}
-       pr-title]]
+        :target remote-url}
+       comment]]
      [:paragraph
-      [:phrase (str "Created: " pr-created " | Closed: " pr-closed)]]]))
+      [:phrase (str "Commit: " commit-id " | Date: " author-date)]]
+     [:paragraph
+      [:phrase remote-url]]
+     [:spacer]]))
 
 (defn- build-commits-chapter []
   (loop [result []]
@@ -78,7 +82,7 @@
         (flatten-1 (flatten-1 result))))))
 
 (defn- build-pr-paragraph [pr]
-  (let [;pr-repo-name (:repository :name pr)
+  (let [pr-repo-name (-> pr :repository :name)
         pr-id (:pullRequestId pr)
         pr-url (:url pr)
         pr-title (:title pr)
@@ -91,7 +95,8 @@
         :target pr-url}
        pr-title]]
      [:paragraph
-      [:phrase (str "Created: " pr-created " | Closed: " pr-closed)]]]))
+      [:phrase (str "Created: " pr-created " | Closed: " pr-closed)]]
+     [:spacer]]))
 
 (defn- build-pr-chapter []
   (loop [result []]
@@ -110,11 +115,11 @@
         (flatten-1 (flatten-1 result))))))
 
 (defn present-results []
-  (let [pdf-body-prs (build-pr-chapter)
-        pdf-body-commits (build-commits-chapter)
+  (let [pdf-pr-chapter (build-pr-chapter)
+        pdf-commit-chapter (build-commits-chapter)
         pdf-whole (conj pdf-config
-                        pdf-body-prs
-                        pdf-body-commits)]
+                        pdf-pr-chapter
+                        pdf-commit-chapter)]
     (info "PDF generation START")
     (time (pdf/pdf pdf-whole pdf-file-name))
     (info "PDF generation END")))
