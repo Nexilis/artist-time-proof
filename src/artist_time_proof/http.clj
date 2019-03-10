@@ -1,19 +1,21 @@
 (ns artist-time-proof.http
   (:require
     [artist-time-proof.conf :refer :all]
-    [clj-http.client :as http-client]
-    [cheshire.core :as json]))
+    [cheshire.core :as json]
+    [clj-time.core :as t]))
 
-(def azure-url-base "https://dev.azure.com/%s/%s/_apis/%s%s")
+(def azure-base-url
+  (format "https://dev.azure.com/%s/"
+          (azure-config :organization)))
 
-(defn azure-url [resource query-params]
-  (format azure-url-base
-          (azure-config :organization)
-          (azure-config :team-project)
-          resource
-          query-params))
+(def default-http-opts {:basic-auth [(auth :user) (auth :pass)]
+                        :async?     true})
 
-(def basic-auth {:basic-auth [(auth :user) (auth :pass)]})
+(def date-range (t/interval (t/minus (t/now) (t/months 1))
+                            (t/now)))
 
-(defn http-get-response-body [url]
-  (json/parse-string (:body (http-client/get url basic-auth)) true))
+(defn handle-exception [exception]
+  (println "DEBUG ERROR" exception))
+
+(defn extract-value-from [response]
+  ((json/parse-string (:body response) true) :value))

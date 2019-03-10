@@ -1,29 +1,44 @@
 (ns artist-time-proof.commits
   (:require
-    [artist-time-proof.conf :refer :all]
+    [clojure.core.async :refer :all :exclude [map into reduce merge take transduce partition partition-by]]
     [artist-time-proof.http :refer :all]
-    [artist-time-proof.repositories :refer :all]))
+    [artist-time-proof.repositories :refer :all]
+    [clj-http.client :as http]
+    [cheshire.core :as json]))
 
-;https://dev.azure.com/{organization}/{project}/_apis/git/repositories/{repositoryId}/commits?searchCriteria.author={searchCriteria.author}&searchCriteria.toDate={searchCriteria.toDate}&searchCriteria.fromDate={searchCriteria.fromDate}&api-version=4.1
+(def commits-chan (chan))
+(def commits-response-count (atom 0))
 
-(defn- get-commits-query-params []
-  (str "?searchCriteria.author="   (azure-config :git-author)
-       "&searchCriteria.toDate="   (azure-config :to-date)
-       "&searchCriteria.fromDate=" (azure-config :from-date)
-       "&api-version=4.1"))
+(defn- close-commits-chan! [callback-no]
+  (close! commits-chan)
+  (println "DEBUG closed commits-chan in callback no" callback-no))
 
-(defn- get-commits-url [repo-id]
-  (azure-url (str "git/repositories/" repo-id "/commits") (get-commits-query-params)))
+(defn- put-on-commits-chan! [response callback-no]
+  (put! commits-chan (extract-value-from response))
+  (println "DEBUG put on commits-chan in callback no" callback-no))
 
-(defn commits []
-  (let [commits-from-all-repos
-        (flatten
-          (reduce (fn [accumulator repo-id]
-                    (conj accumulator
-                          (let [commits-from-single-repo (http-get-response-body (get-commits-url repo-id))]
-                            (if (> (commits-from-single-repo :count) 0)
-                                (commits-from-single-repo :value)
-                                []))))
-                  []
-                  (repo-ids)))]
-    (map :url commits-from-all-repos)))
+(defn- handle-commits-fetch-success! [response repos-count]
+  (swap! commits-response-count inc)
+  (let [callback-no (deref commits-response-count)]
+    (println "DEBUG commits callback no" callback-no)
+    (put-on-commits-chan! response callback-no)
+    (if (= callback-no repos-count)
+      (close-commits-chan! callback-no))))
+
+(defn- fetch-commits [repo-ids]
+  (doseq [repo-id repo-ids]
+    (let [url (str azure-base-url "_apis/git/repositories/" repo-id "/commits")
+          repos-count (count repo-ids)]
+      (http/get url
+                default-http-opts                           ;; TODO: filter with dates and author
+                (fn [response] (handle-commits-fetch-success! response
+                                                              repos-count))
+                handle-exception))))
+
+(defn load-commits []
+  (let [repo-ids-promise (promise)]
+    (fetch-repositories repo-ids-promise)
+    (println "DEBUG repo-ids")
+    (let [repo-ids (deref repo-ids-promise)]
+      (println "DEBUG repos count" (count repo-ids))
+      (fetch-commits repo-ids))))
