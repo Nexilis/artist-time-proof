@@ -32,7 +32,7 @@
       (debug "timeout or closed" channel-name))
     take-result))
 
-(defn format-date-string-for-pdf [date-string]
+(defn- format-date-string-for-pdf [date-string]
   (f/unparse pdf-date-time-formatter (f/parse date-string)))
 
 (defn- accumulate-single-commit [accumulator commit]
@@ -59,20 +59,6 @@
            [:phrase {:size 7}
             remote-url]]
           [:spacer])))
-
-(defn- build-commits-chapter []
-  (loop [result [[:paragraph {:size 20} "Commits"] [:line] [:spacer]]]
-    (let [data-from-chan (take-or-timeout!! commits-chan (name `commits-chan))]
-      (if data-from-chan
-        (let [updated-result
-              (doall
-                (reduce
-                  (fn [accumulator x]
-                    (accumulate-single-commit accumulator x))
-                  result
-                  data-from-chan))]
-          (recur updated-result))
-        result))))
 
 (defn- accumulate-single-pull-request [accumulator pr]
   (let [repository-name (-> pr :repository :name)
@@ -114,8 +100,22 @@
            [:phrase url]]
           [:spacer])))
 
-(defn- build-pr-chapter []
-  (loop [result [[:paragraph {:size 20} "Pull Requests"] [:line] [:spacer]]]
+(defn- build-commits-chapter [pdf]
+  (loop [result (conj pdf [:paragraph {:size 20} "Commits"] [:line] [:spacer])]
+    (let [data-from-chan (take-or-timeout!! commits-chan (name `commits-chan))]
+      (if data-from-chan
+        (let [updated-result
+              (doall
+                (reduce
+                  (fn [accumulator x]
+                    (accumulate-single-commit accumulator x))
+                  result
+                  data-from-chan))]
+          (recur updated-result))
+        result))))
+
+(defn- build-pr-chapter [pdf]
+  (loop [result (conj pdf [:paragraph {:size 20} "Pull Requests"] [:line] [:spacer])]
     (let [data-from-chan (take-or-timeout!! pull-requests-chan (name `pull-requests-chan))]
       (if data-from-chan
         (let [updated-result
@@ -129,11 +129,8 @@
         result))))
 
 (defn present-results []
-  (let [pdf-pr-chapter (build-pr-chapter)
-        pdf-commit-chapter (build-commits-chapter)
-        pdf-whole (conj pdf-config
-                        pdf-pr-chapter
-                        pdf-commit-chapter)]
+  (let [pdf-with-prs (build-pr-chapter pdf-config)
+        pdf-whole (build-commits-chapter pdf-with-prs)]
     (info "PDF generation START")
     (debug pdf-whole)
     (time (pdf/pdf pdf-whole pdf-file-name))
