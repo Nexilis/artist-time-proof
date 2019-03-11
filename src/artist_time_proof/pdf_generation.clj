@@ -2,6 +2,7 @@
   (:require
     [artist-time-proof.pull-requests :refer :all]
     [artist-time-proof.commits :refer :all]
+    [artist-time-proof.http :refer :all]
     [clojure.core.async :refer :all :exclude [map into reduce merge take transduce partition partition-by]]
     [clj-time.core :as t]
     [clj-time.format :as f]
@@ -12,17 +13,27 @@
              logf tracef debugf infof warnf errorf fatalf reportf
              spy get-env]]))
 
-(def pdf-config [{:title         "Artist Time Proof"
-                  :size          "a4"
-                  :footer        "page"
-                  :left-margin   25
-                  :right-margin  25
-                  :top-margin    35
-                  :bottom-margin 35}])
+(def pdf-base [{:title         "Artist Time Proof"
+                :size          "a4"
+                :footer        "page"
+                :left-margin   25
+                :right-margin  25
+                :top-margin    35
+                :bottom-margin 35}
+               [:paragraph {:size 20 :style :bold} "Copyrights report"]
+               [:spacer]
+               [:paragraph
+                [:phrase {:size 12}
+                 (str "For: " (f/unparse (f/formatters :date) today)
+                      " - " (f/unparse (f/formatters :date) month-ago))]]
+               [:spacer 2]])
 
-(def pdf-file-name (str "artist-time-proof" (f/unparse (f/formatters :date-time) (t/now)) ".pdf"))
+(def pdf-file-name (str "artist-time-proof-" (f/unparse (f/formatters :date-time) today) ".pdf"))
 
 (def pdf-date-time-formatter (f/formatter "yyyy-MM-dd HH:MM"))
+
+(defn- date-time->string [date-time]
+  (f/unparse pdf-date-time-formatter (f/parse date-time)))
 
 (defn- take-or-timeout!! [channel channel-name]
   "Takes data from a channel or timeouts after 2 seconds."
@@ -31,9 +42,6 @@
       (debug "taken from" channel-name)
       (debug "timeout or closed" channel-name))
     take-result))
-
-(defn- format-date-string-for-pdf [date-string]
-  (f/unparse pdf-date-time-formatter (f/parse date-string)))
 
 (defn- accumulate-single-commit [accumulator commit]
   (let [commit-id (:commitId commit)
@@ -54,7 +62,7 @@
           [:paragraph
            [:phrase {:size 8}
             (str "Commit: " commit-id
-                 " | Date: " (format-date-string-for-pdf author-date))]]
+                 " | Date: " (date-time->string author-date))]]
           [:paragraph
            [:phrase {:size 7}
             remote-url]]
@@ -92,15 +100,15 @@
              :target url}
             title]]
           [:paragraph {:size 8}
-           [:phrase (str "Created: " (format-date-string-for-pdf creation-date)
+           [:phrase (str "Created: " (date-time->string creation-date)
                          (if closed-date
                            (str " | Closed: "
-                                (format-date-string-for-pdf closed-date))))]]
+                                (date-time->string closed-date))))]]
           [:paragraph {:size 7}
            [:phrase url]]
           [:spacer])))
 
-(defn- build-commits-chapter [pdf]
+(defn- conj-commits-chapter [pdf]
   (loop [result (conj pdf [:paragraph {:size 20} "Commits"] [:line] [:spacer])]
     (let [data-from-chan (take-or-timeout!! commits-chan (name `commits-chan))]
       (if data-from-chan
@@ -114,7 +122,7 @@
           (recur updated-result))
         result))))
 
-(defn- build-pr-chapter [pdf]
+(defn- conj-pull-requests-chapter [pdf]
   (loop [result (conj pdf [:paragraph {:size 20} "Pull Requests"] [:line] [:spacer])]
     (let [data-from-chan (take-or-timeout!! pull-requests-chan (name `pull-requests-chan))]
       (if data-from-chan
@@ -129,8 +137,8 @@
         result))))
 
 (defn present-results []
-  (let [pdf-with-prs (build-pr-chapter pdf-config)
-        pdf-whole (build-commits-chapter pdf-with-prs)]
+  (let [pdf-with-prs (conj-pull-requests-chapter pdf-base)
+        pdf-whole (conj-commits-chapter pdf-with-prs)]
     (info "PDF generation START")
     (debug pdf-whole)
     (time (pdf/pdf pdf-whole pdf-file-name))
