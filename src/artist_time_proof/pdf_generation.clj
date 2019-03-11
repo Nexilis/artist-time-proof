@@ -89,7 +89,7 @@
           (recur updated-result))
         (flatten-1 (flatten-1 result))))))
 
-(defn- build-pr-paragraph [pr]
+(defn- build-pr-paragraph [accumulator pr]
   (let [repository-name (-> pr :repository :name)
         last-merge-source-commit (:lastMergeSourceCommit pr)
         description (:description pr)
@@ -113,36 +113,35 @@
         creation-date (:creationDate pr)
         last-merge-commit (:lastMergeCommit pr)
         reviewers (:reviewers pr)]
-    [[:paragraph
-      [:phrase (str "(#" pull-request-id ") ")]
-      [:anchor
-       {:style  {:color [0 0 200]}
-        :target url}
-       title]]
-     [:paragraph {:size 8}
-      [:phrase (str "Created: " (format-date-string-for-pdf creation-date)
-                    (if closed-date
-                      (str " | Closed: "
-                           (format-date-string-for-pdf closed-date))))]]
-     [:paragraph {:size 7}
-      [:phrase url]]
-     [:spacer]]))
+    (conj accumulator
+          [:paragraph
+           [:phrase (str "(#" pull-request-id ") ")]
+           [:anchor
+            {:style  {:color [0 0 200]}
+             :target url}
+            title]]
+          [:paragraph {:size 8}
+           [:phrase (str "Created: " (format-date-string-for-pdf creation-date)
+                         (if closed-date
+                           (str " | Closed: "
+                                (format-date-string-for-pdf closed-date))))]]
+          [:paragraph {:size 7}
+           [:phrase url]]
+          [:spacer])))
 
 (defn- build-pr-chapter []
-  (loop [result []]
+  (loop [result [[:paragraph {:size 20} "Pull Requests"] [:line] [:spacer]]]
     (let [pr-seq (take-or-timeout!! pull-requests-chan (name `pull-requests-chan))]
       (if pr-seq
-        (let [prs-from-one-repo
+        (let [updated-result
               (doall
                 (reduce
                   (fn [accumulator x]
-                    (conj accumulator (build-pr-paragraph x)))
-                  []
-                  pr-seq))
-              updated-result
-              (conj result prs-from-one-repo)]
+                    (build-pr-paragraph accumulator x))
+                  result
+                  pr-seq))]
           (recur updated-result))
-        (flatten-1 (flatten-1 result))))))
+        result))))
 
 (defn present-results []
   (let [pdf-pr-chapter (build-pr-chapter)
@@ -151,5 +150,6 @@
                         pdf-pr-chapter
                         pdf-commit-chapter)]
     (info "PDF generation START")
+    (debug pdf-whole)
     (time (pdf/pdf pdf-whole pdf-file-name))
     (info "PDF generation END")))
