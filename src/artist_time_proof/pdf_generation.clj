@@ -24,20 +24,6 @@
 
 (def pdf-date-time-formatter (f/formatter "yyyy-MM-dd HH:MM"))
 
-(defn- flatten-1
-  "Flattens only the first level of a given sequence, e.g. [[1 2][3]] becomes
-   [1 2 3], but [[1 [2]] [3]] becomes [1 [2] 3]."
-  [seq]
-  (if (or (not (seqable? seq)) (nil? seq))
-    seq                                                     ; if seq is nil or not a sequence, don't do anything
-    (loop [acc [] [elt & others] seq]
-      (if (nil? elt) acc
-                     (recur
-                       (if (seqable? elt)
-                         (apply conj acc elt)               ; if elt is a sequence, add each element of elt
-                         (conj acc elt))                    ; if elt is not a sequence, add elt itself
-                       others)))))
-
 (defn- take-or-timeout!! [channel channel-name]
   "Takes data from a channel or timeouts after 2 seconds."
   (let [[take-result take-source] (alts!! [channel (timeout 2000)])]
@@ -49,7 +35,7 @@
 (defn format-date-string-for-pdf [date-string]
   (f/unparse pdf-date-time-formatter (f/parse date-string)))
 
-(defn- build-commits-paragraph [commit]
+(defn- accumulate-single-commit [accumulator commit]
   (let [commit-id (:commitId commit)
         author (:author commit)
         author-date (-> commit :author :date)
@@ -59,37 +45,36 @@
         changes-count (:changesCount commit)
         url (:url commit)
         remote-url (:remoteUrl commit)]
-    [[:paragraph
-      [:anchor
-       {:style  {:color [0 0 200]}
-        :target remote-url}
-       comment]]
-     [:paragraph
-      [:phrase {:size 8}
-       (str "Commit: " commit-id
-            " | Date: " (format-date-string-for-pdf author-date))]]
-     [:paragraph
-      [:phrase {:size 7}
-       remote-url]]
-     [:spacer]]))
+    (conj accumulator
+          [:paragraph
+           [:anchor
+            {:style  {:color [0 0 200]}
+             :target remote-url}
+            comment]]
+          [:paragraph
+           [:phrase {:size 8}
+            (str "Commit: " commit-id
+                 " | Date: " (format-date-string-for-pdf author-date))]]
+          [:paragraph
+           [:phrase {:size 7}
+            remote-url]]
+          [:spacer])))
 
 (defn- build-commits-chapter []
-  (loop [result []]
-    (let [commits-seq (take-or-timeout!! commits-chan (name `commits-chan))]
-      (if commits-seq
-        (let [commits-from-one-repo
+  (loop [result [[:paragraph {:size 20} "Commits"] [:line] [:spacer]]]
+    (let [data-from-chan (take-or-timeout!! commits-chan (name `commits-chan))]
+      (if data-from-chan
+        (let [updated-result
               (doall
                 (reduce
                   (fn [accumulator x]
-                    (conj accumulator (build-commits-paragraph x)))
-                  []
-                  commits-seq))
-              updated-result
-              (conj result commits-from-one-repo)]
+                    (accumulate-single-commit accumulator x))
+                  result
+                  data-from-chan))]
           (recur updated-result))
-        (flatten-1 (flatten-1 result))))))
+        result))))
 
-(defn- build-pr-paragraph [accumulator pr]
+(defn- accumulate-single-pull-request [accumulator pr]
   (let [repository-name (-> pr :repository :name)
         last-merge-source-commit (:lastMergeSourceCommit pr)
         description (:description pr)
@@ -131,15 +116,15 @@
 
 (defn- build-pr-chapter []
   (loop [result [[:paragraph {:size 20} "Pull Requests"] [:line] [:spacer]]]
-    (let [pr-seq (take-or-timeout!! pull-requests-chan (name `pull-requests-chan))]
-      (if pr-seq
+    (let [data-from-chan (take-or-timeout!! pull-requests-chan (name `pull-requests-chan))]
+      (if data-from-chan
         (let [updated-result
               (doall
                 (reduce
                   (fn [accumulator x]
-                    (build-pr-paragraph accumulator x))
+                    (accumulate-single-pull-request accumulator x))
                   result
-                  pr-seq))]
+                  data-from-chan))]
           (recur updated-result))
         result))))
 
