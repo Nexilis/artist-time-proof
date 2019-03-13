@@ -3,6 +3,7 @@
     [artist-time-proof.pull-requests :refer :all]
     [artist-time-proof.commits :refer :all]
     [artist-time-proof.http :refer :all]
+    [artist-time-proof.conf :refer :all]
     [clojure.core.async :refer :all :exclude [map into reduce merge take transduce partition partition-by]]
     [clj-time.core :as t]
     [clj-time.format :as f]
@@ -16,11 +17,12 @@
 (def pdf-base [{:title         "Artist Time Proof"
                 :size          "a4"
                 :footer        "page"
+                :encoding      :unicode
                 :left-margin   25
                 :right-margin  25
                 :top-margin    35
                 :bottom-margin 35}
-               [:paragraph {:size 20 :style :bold} "Copyrights report"]
+               [:paragraph {:size 20 :style :bold} (str "Copyrights report - " (azure-config :git-author))]
                [:spacer]
                [:paragraph
                 [:phrase {:size 12}
@@ -37,7 +39,7 @@
 
 (defn- take-or-timeout!! [channel channel-name]
   "Takes data from a channel or timeouts after 2 seconds."
-  (let [[take-result take-source] (alts!! [channel (timeout 2000)])]
+  (let [[take-result take-source] (alts!! [channel (timeout 5000)])]
     (if take-result
       (debug "taken from" channel-name)
       (debug "timeout or closed" channel-name))
@@ -108,38 +110,32 @@
            [:phrase url]]
           [:spacer])))
 
-(defn- conj-commits-chapter [pdf]
-  (loop [result (conj pdf [:paragraph {:size 20} "Commits"] [:line] [:spacer])]
-    (let [data-from-chan (take-or-timeout!! commits-chan (name `commits-chan))]
+(defn- conj-chapter [pdf chapter-name source-chan chan-name accumulate-function]
+  (loop [result (conj pdf [:paragraph {:size 20} chapter-name] [:line] [:spacer])]
+    (let [data-from-chan (take-or-timeout!! source-chan chan-name)]
       (if data-from-chan
         (let [updated-result
               (doall
                 (reduce
                   (fn [accumulator x]
-                    (accumulate-single-commit accumulator x))
-                  result
-                  data-from-chan))]
-          (recur updated-result))
-        result))))
-
-(defn- conj-pull-requests-chapter [pdf]
-  (loop [result (conj pdf [:paragraph {:size 20} "Pull Requests"] [:line] [:spacer])]
-    (let [data-from-chan (take-or-timeout!! pull-requests-chan (name `pull-requests-chan))]
-      (if data-from-chan
-        (let [updated-result
-              (doall
-                (reduce
-                  (fn [accumulator x]
-                    (accumulate-single-pull-request accumulator x))
+                    (accumulate-function accumulator x))
                   result
                   data-from-chan))]
           (recur updated-result))
         result))))
 
 (defn present-results []
-  (let [pdf-with-prs (conj-pull-requests-chapter pdf-base)
-        pdf-whole (conj-commits-chapter pdf-with-prs)]
+  (let [pdf-with-prs (conj-chapter pdf-base
+                                   "Pull Requests"
+                                   pull-requests-chan
+                                   (name `pull-requests-chan)
+                                   accumulate-single-pull-request)
+        pdf-with-all (conj-chapter pdf-with-prs
+                                   "Commits"
+                                   commits-chan
+                                   (name `commits-chan)
+                                   accumulate-single-commit)]
     (info "PDF generation START")
-    (debug pdf-whole)
-    (time (pdf/pdf pdf-whole pdf-file-name))
+    (debug pdf-with-all)
+    (time (pdf/pdf pdf-with-all pdf-file-name))
     (info "PDF generation END")))
