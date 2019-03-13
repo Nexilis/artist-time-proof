@@ -14,14 +14,17 @@
              logf tracef debugf infof warnf errorf fatalf reportf
              spy get-env]]))
 
-(def pdf-base [{:title         "Artist Time Proof"
-                :size          "a4"
-                :footer        "page"
-                :encoding      :unicode
-                :left-margin   25
-                :right-margin  25
-                :top-margin    35
-                :bottom-margin 35}
+(def pdf-base [{:title                  "Artist Time Proof"
+                :size                   "a4"
+                :footer                 "page"
+                :pages                  true
+                :register-system-fonts? true
+                :font                   {:encoding :unicode
+                                         :ttf-name "arial.ttf"}
+                :left-margin            25
+                :right-margin           25
+                :top-margin             35
+                :bottom-margin          35}
                [:paragraph {:size 20 :style :bold} (str "Copyrights report - " (azure-config :git-author))]
                [:spacer]
                [:paragraph
@@ -39,7 +42,7 @@
 
 (defn- take-or-timeout!! [channel channel-name]
   "Takes data from a channel or timeouts after 2 seconds."
-  (let [[take-result take-source] (alts!! [channel (timeout 5000)])]
+  (let [[take-result] (alts!! [channel (timeout 5000)])]
     (if take-result
       (debug "taken from" channel-name)
       (debug "timeout or closed" channel-name))
@@ -47,13 +50,8 @@
 
 (defn- accumulate-single-commit [accumulator commit]
   (let [commit-id (:commitId commit)
-        author (:author commit)
         author-date (-> commit :author :date)
-        committer (:committer commit)
         comment (:comment commit)
-        comment-truncated (:commentTruncated commit)
-        changes-count (:changesCount commit)
-        url (:url commit)
         remote-url (:remoteUrl commit)]
     (conj accumulator
           [:paragraph
@@ -71,29 +69,11 @@
           [:spacer])))
 
 (defn- accumulate-single-pull-request [accumulator pr]
-  (let [repository-name (-> pr :repository :name)
-        last-merge-source-commit (:lastMergeSourceCommit pr)
-        description (:description pr)
-        repository (:repository pr)
-        created-by (:createdBy pr)
-        completion-options (:completionOptions pr)
-        pull-request-id (:pullRequestId pr)
+  (let [pull-request-id (:pullRequestId pr)
         closed-date (:closedDate pr)
-        is-draft (:isDraft pr)
-        completion-queue-time (:completionQueueTime pr)
-        code-review-id (:codeReviewId pr)
-        merge-id (:mergeId pr)
-        supports-iterations (:supportsIterations pr)
         title (:title pr)
-        target-ref-name (:targetRefName pr)
-        status (:status pr)
-        merge-status (:mergeStatus pr)
         url (:url pr)
-        last-merge-target-commit (:lastMergeTargetCommit pr)
-        source-ref-name (:sourceRefName pr)
-        creation-date (:creationDate pr)
-        last-merge-commit (:lastMergeCommit pr)
-        reviewers (:reviewers pr)]
+        creation-date (:creationDate pr)]
     (conj accumulator
           [:paragraph
            [:phrase (str "(#" pull-request-id ") ")]
