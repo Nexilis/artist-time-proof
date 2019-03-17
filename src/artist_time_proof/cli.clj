@@ -5,29 +5,28 @@
 
 ;; eg. jondoe
 (spec/def ::auth-user
-  #(and string? (not (contains? % "@"))))
+  #(and string? (not (.contains % "@"))))
 
 ;; eg. a**************************************************b
 (spec/def ::auth-pass
   #(and string? (= (count %) 52)))
 
 ;; eg. microsoft
-(spec/def ::azure-org
-  #(and string?))
+(spec/def ::azure-org string?)
 
 ;; eg. Jon Doe
-(spec/def ::git-author
-  #(and string? (not (contains? % "@"))))
+(spec/def ::full-name
+  #(and string? (not (.contains % "@"))))
 
 (def cli-options
   [["-u" "--user USER" "Azure authentication user, eg. jondoe"
-    :validate [#(spec/valid? :artist-time-proof.specifications/auth-user %)]]
+    :validate [#(spec/valid? ::auth-user %)]]
    ["-p" "--pass PASSWORD" "Azure authentication password, eg. a**************************************************b"
-    :validate [#(spec/valid? :artist-time-proof.specifications/auth-pass %)]]
+    :validate [#(spec/valid? ::auth-pass %)]]
    ["-o" "--org ORGANIZATION" "Azure organization, eg. microsoft"
-    :validate [#(spec/valid? :artist-time-proof.specifications/azure-org %)]]
+    :validate [#(spec/valid? ::azure-org %)]]
    ["-f" "--full-name FIRST NAME AND SURNAME" "Author's name shown on report, eg. Jon Doe"
-    :validate [#(spec/valid? :artist-time-proof.specifications/git-author %)]]
+    :validate [#(spec/valid? ::full-name %)]]
    ["-h" "--help"]])
 
 (defn- prepare-help [options-summary]
