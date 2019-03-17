@@ -43,29 +43,34 @@
     (if (= callback-no 2)
       (close-pull-requests-chan! callback-no))))
 
-(defn- single-pull-request-fetch [options]
-  (http/get url-pull-requests
-            options
+(defn- single-pull-request-fetch [http-config]
+  (debug http-config)
+  (http/get (:pull-requests-url http-config)
+            (:request-options http-config)
             handle-prs-fetch-success!
             handle-exception))
 
-(defn- fetch-pull-requests [user-id]
-  (let [options [(conj default-http-opts {:query-params {:status "All" :creatorId user-id}})
-                 (conj default-http-opts {:query-params {:status "All" :reviewerId user-id}})]]
-    (doall (map single-pull-request-fetch options))))
+(defn- build-pull-request-config [http-config query-params]
+  {:pull-requests-url (-> http-config :url :pull-requests)
+   :request-options   (conj (:request-options http-config) query-params)})
 
-(defn- fetch-user-id [result-promise]
-  (http/get url-user-id
-            default-http-opts
+(defn- fetch-pull-requests [http-config user-id]
+  (let [http-configs [(build-pull-request-config http-config {:query-params {:status "All" :creatorId user-id}})
+                      (build-pull-request-config http-config {:query-params {:status "All" :reviewerId user-id}})]]
+    (doall (map single-pull-request-fetch http-configs))))
+
+(defn- fetch-user-id [http-config result-promise]
+  (http/get (-> http-config :url :connection-data)
+            (:request-options http-config)
             (fn [response]
               (let [decoded-body (json/parse-string (:body response) true)
                     user-id (-> decoded-body :authenticatedUser :id)]
                 (deliver result-promise user-id)))
             handle-exception))
 
-(defn load-pull-requests []
+(defn load-pull-requests [http-config]
   (let [user-id-promise (promise)]
-    (fetch-user-id user-id-promise)
+    (fetch-user-id http-config user-id-promise)
     (let [user-id (deref user-id-promise)]
       (info "user-id" user-id)
-      (fetch-pull-requests user-id))))
+      (fetch-pull-requests http-config user-id))))

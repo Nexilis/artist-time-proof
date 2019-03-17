@@ -1,15 +1,16 @@
 (ns artist-time-proof.commits
   (:require
     [clojure.core.async :refer :all :exclude [map into reduce merge take transduce partition partition-by]]
+    [clojure.string :as string]
     [artist-time-proof.http :refer :all]
     [artist-time-proof.repositories :refer :all]
-    [artist-time-proof.conf :refer :all]
     [clj-http.client :as http]
     [cheshire.core :as json]
     [taoensso.timbre :as timbre
      :refer [log trace debug info warn error fatal report
              logf tracef debugf infof warnf errorf fatalf reportf
              spy get-env]]))
+
 
 (def commits-chan (chan))
 (def commits-response-count (atom 0))
@@ -30,19 +31,19 @@
     (if (= callback-no repos-count)
       (close-commits-chan! callback-no))))
 
-(defn- fetch-commits [repo-ids]
+(defn- fetch-commits [http-config repo-ids]
   (doseq [repo-id repo-ids]
     (let [repos-count (count repo-ids)]
-      (http/get (url-commits repo-id)
-                (conj default-http-opts {:query-params {:author   (auth :user)
-                                                        :fromDate (date-to-query-string-format month-ago)
-                                                        :toDate   (date-to-query-string-format today)}})
+      (http/get (string/replace (-> http-config :url :commits) #"repo-id" repo-id)
+                (conj (:request-options http-config) {:query-params {:author   (:author http-config)
+                                                                     :fromDate (date->query-string month-ago)
+                                                                     :toDate   (date->query-string today)}})
                 (fn [response] (handle-commits-fetch-success! response
                                                               repos-count))
                 handle-exception))))
 
-(defn load-commits []
+(defn load-commits [http-config]
   (let [repo-ids-promise (promise)]
-    (fetch-repositories repo-ids-promise)
+    (fetch-repositories http-config repo-ids-promise)
     (let [repo-ids (deref repo-ids-promise)]
-      (fetch-commits repo-ids))))
+      (fetch-commits http-config repo-ids))))

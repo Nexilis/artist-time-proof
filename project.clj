@@ -4,8 +4,9 @@
   :license {:name "GNU GENERAL PUBLIC LICENSE Version 3"
             :url "https://www.gnu.org/licenses/gpl-3.0.en.html"}
   :dependencies [[org.clojure/clojure "1.10.0"]
-                 [org.clojure/tools.cli "0.3.5"]
+                 [org.clojure/tools.cli "0.4.1"]
                  [org.clojure/core.async "0.4.490"]
+                 [org.clojure/core.specs.alpha "0.2.44"]
                  [cheshire "5.8.1"]
                  [clj-time "0.15.1"]
                  [clj-http "3.9.1"]

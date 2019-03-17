@@ -3,35 +3,34 @@
     [artist-time-proof.pull-requests :refer :all]
     [artist-time-proof.commits :refer :all]
     [artist-time-proof.http :refer :all]
-    [artist-time-proof.conf :refer :all]
     [clojure.core.async :refer :all :exclude [map into reduce merge take transduce partition partition-by]]
     [clj-time.core :as t]
     [clj-time.format :as f]
     [clj-pdf.core :as pdf]
-    [clojure.pprint :as pp]
     [taoensso.timbre :as timbre
      :refer [log trace debug info warn error fatal report
              logf tracef debugf infof warnf errorf fatalf reportf
              spy get-env]]))
 
-(def pdf-base [{:title                  "Artist Time Proof"
-                :size                   "a4"
-                :footer                 "page"
-                :pages                  true
-                :register-system-fonts? true
-                :font                   {:encoding :unicode
-                                         :ttf-name "arial.ttf"}
-                :left-margin            25
-                :right-margin           25
-                :top-margin             35
-                :bottom-margin          35}
-               [:paragraph {:size 20 :style :bold} (str "Copyrights report - " (azure-config :git-author))]
-               [:spacer]
-               [:paragraph
-                [:phrase {:size 12}
-                 (str "For: " (f/unparse (f/formatters :date) today)
-                      " - " (f/unparse (f/formatters :date) month-ago))]]
-               [:spacer 2]])
+(defn- build-pdf-base [full-name]
+  [{:title                  "Artist Time Proof"
+    :size                   "a4"
+    :footer                 "page"
+    :pages                  true
+    :register-system-fonts? true
+    :font                   {:encoding :unicode
+                             :ttf-name "arial.ttf"}
+    :left-margin            25
+    :right-margin           25
+    :top-margin             35
+    :bottom-margin          35}
+   [:paragraph {:size 20 :style :bold} (str "Copyrights report - " full-name)]
+   [:spacer]
+   [:paragraph
+    [:phrase {:size 12}
+     (str "For: " (f/unparse (f/formatters :date) today)
+          " - " (f/unparse (f/formatters :date) month-ago))]]
+   [:spacer 2]])
 
 (def pdf-file-name (str "artist-time-proof-" (f/unparse (f/formatters :date-time) today) ".pdf"))
 
@@ -41,7 +40,7 @@
   (f/unparse pdf-date-time-formatter (f/parse date-time)))
 
 (defn- take-or-timeout!! [channel channel-name]
-  "Takes data from a channel or timeouts after 2 seconds."
+  "Takes data from a channel or timeouts after configured time."
   (let [[take-result] (alts!! [channel (timeout 5000)])]
     (if take-result
       (debug "taken from" channel-name)
@@ -104,8 +103,9 @@
           (recur updated-result))
         result))))
 
-(defn present-results []
-  (let [pdf-with-prs (conj-chapter pdf-base
+(defn present-results [full-name]
+  (let [pdf-base (build-pdf-base full-name)
+        pdf-with-prs (conj-chapter pdf-base
                                    "Pull Requests"
                                    pull-requests-chan
                                    (name `pull-requests-chan)

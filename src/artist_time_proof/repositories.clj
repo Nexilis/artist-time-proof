@@ -3,7 +3,7 @@
     [artist-time-proof.http :refer :all]
     [cheshire.core :as json]
     [clj-http.client :as http]
-    [taoensso.timbre :as timbre
+    [taoensso.timbre
      :refer [log trace debug info warn error fatal report
              logf tracef debugf infof warnf errorf fatalf reportf
              spy get-env]]))
@@ -14,9 +14,9 @@
     (info "repos count" (count repo-ids))
     (deliver result-promise repo-ids)))
 
-(defn fetch-repositories [result-promise]
-  (http/get url-repositories
-            (conj default-http-opts {:query-params {:includeLinks  false
-                                                    :includeHidden true}})
+(defn fetch-repositories [http-config result-promise]
+  (http/get (-> http-config :url :repositories)
+            (conj (:request-options http-config) {:query-params {:includeLinks  false
+                                                                 :includeHidden true}})
             (fn [response] (handle-repositories-fetch-success! response result-promise))
             handle-exception))
