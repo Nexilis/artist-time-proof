@@ -12,7 +12,7 @@
              logf tracef debugf infof warnf errorf fatalf reportf
              spy get-env]]))
 
-(defn- build-pdf-base [full-name]
+(defn- build-pdf-base [full-name app-config]
   [{:title                  "Artist Time Proof"
     :size                   "a4"
     :footer                 "page"
@@ -28,11 +28,11 @@
    [:spacer]
    [:paragraph
     [:phrase {:size 12}
-     (str "For: " (f/unparse (f/formatters :date) today)
-          " - " (f/unparse (f/formatters :date) month-ago))]]
+     (str "For: " (f/unparse (f/formatters :date) (:date-to app-config))
+          " - " (f/unparse (f/formatters :date) (:date-from app-config)))]]
    [:spacer 2]])
 
-(def pdf-file-name (str "artist-time-proof-" (f/unparse (f/formatters :date-time) today) ".pdf"))
+(def pdf-file-name (str "artist-time-proof-" (f/unparse (f/formatters :date-time) (t/now)) ".pdf"))
 
 (def pdf-date-time-formatter (f/formatter "yyyy-MM-dd HH:MM"))
 
@@ -103,8 +103,8 @@
           (recur updated-result))
         result))))
 
-(defn present-results [full-name]
-  (let [pdf-base (build-pdf-base full-name)
+(defn present-results [full-name app-config]
+  (let [pdf-base (build-pdf-base full-name app-config)
         pdf-with-prs (conj-chapter pdf-base
                                    "Pull Requests"
                                    pull-requests-chan

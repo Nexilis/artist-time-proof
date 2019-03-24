@@ -31,19 +31,19 @@
     (if (= callback-no repos-count)
       (close-commits-chan! callback-no))))
 
-(defn- fetch-commits [http-config repo-ids]
+(defn- fetch-commits [app-config repo-ids]
   (doseq [repo-id repo-ids]
     (let [repos-count (count repo-ids)]
-      (http/get (string/replace (-> http-config :url :commits) #"repo-id" repo-id)
-                (conj (:request-options http-config) {:query-params {:author   (:author http-config)
-                                                                     :fromDate (date->query-string (:date-from http-config))
-                                                                     :toDate   (date->query-string (:date-to http-config))}})
+      (http/get (string/replace (-> app-config :url :commits) #"repo-id" repo-id)
+                (conj (:request-options app-config) {:query-params {:author   (:author app-config)
+                                                                    :fromDate (date->query-string (:date-from app-config))
+                                                                    :toDate   (date->query-string (:date-to app-config))}})
                 (fn [response] (handle-commits-fetch-success! response
                                                               repos-count))
                 handle-exception))))
 
-(defn load-commits [http-config]
+(defn load-commits [app-config]
   (let [repo-ids-promise (promise)]
-    (fetch-repositories http-config repo-ids-promise)
+    (fetch-repositories app-config repo-ids-promise)
     (let [repo-ids (deref repo-ids-promise)]
-      (fetch-commits http-config repo-ids))))
+      (fetch-commits app-config repo-ids))))

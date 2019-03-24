@@ -14,9 +14,9 @@
     (info "repos count" (count repo-ids))
     (deliver result-promise repo-ids)))
 
-(defn fetch-repositories [http-config result-promise]
-  (http/get (-> http-config :url :repositories)
-            (conj (:request-options http-config) {:query-params {:includeLinks  false
-                                                                 :includeHidden true}})
+(defn fetch-repositories [app-config result-promise]
+  (http/get (-> app-config :url :repositories)
+            (conj (:request-options app-config) {:query-params  {:includeLinks false}
+                                                 :includeHidden true})
             (fn [response] (handle-repositories-fetch-success! response result-promise))
             handle-exception))
