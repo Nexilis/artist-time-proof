@@ -18,12 +18,16 @@
     (go (load-commits http-config)))
   (present-results (:full-name options)))
 
+(defn exit [status msg]
+  (println msg)
+  (System/exit status))
+
 (defn -main [& args]
   (time
     (do
       (info "Program START")
-      (let [{:keys [options exit-message]} (process-args args)]
-        (if exit-message
-          (println exit-message)
-          (load-all options)))
+      (let [{:keys [continue? errors? options exit-message]} (process-args args)]
+        (if continue?
+          (load-all options)
+          (exit (if errors? 0 1) exit-message)))
       (info "Program END"))))
