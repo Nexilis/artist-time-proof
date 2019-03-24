@@ -36,8 +36,8 @@
     (let [repos-count (count repo-ids)]
       (http/get (string/replace (-> http-config :url :commits) #"repo-id" repo-id)
                 (conj (:request-options http-config) {:query-params {:author   (:author http-config)
-                                                                     :fromDate (date->query-string month-ago)
-                                                                     :toDate   (date->query-string today)}})
+                                                                     :fromDate (date->query-string (:date-from http-config))
+                                                                     :toDate   (date->query-string (:date-to http-config))}})
                 (fn [response] (handle-commits-fetch-success! response
                                                               repos-count))
                 handle-exception))))

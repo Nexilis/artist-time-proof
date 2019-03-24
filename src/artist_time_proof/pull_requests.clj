@@ -17,29 +17,31 @@
 (defn- completed? [pr]
   (= (:status pr) "completed"))
 
-(defn- in-date-range? [date-time-string]
-  (t/within? last-month-range (f/parse date-time-string)))
+(defn- in-date-range? [date-time-string date-range]
+  (t/within? date-range (f/parse date-time-string)))
 
-(defn- filter-pull-requests [pr]
-  (if (completed? pr)
-    (in-date-range? (:closedDate pr))
-    (in-date-range? (:creationDate pr))))
+(defn- filter-pull-requests [response date-range]
+  (let [extracted-response-value (extract-value-from response)]
+    (filter #(if (completed? %)
+               (in-date-range? (:closedDate %) date-range)
+               (in-date-range? (:creationDate %) date-range))
+            extracted-response-value)))
 
 (defn- close-pull-requests-chan! [callback-no]
   (close! pull-requests-chan)
   (debug "closed pull-requests-chan in callback no" callback-no))
 
-(defn- put-on-pull-requests-chan! [response callback-no]
-  (put! pull-requests-chan
-        (filter filter-pull-requests
-                (extract-value-from response)))
+(defn- put-on-pull-requests-chan! [filtered-pr callback-no]
+  (put! pull-requests-chan filtered-pr)
   (debug "put on pull-requests-chan in callback no" callback-no))
 
-(defn- handle-prs-fetch-success! [response]
+(defn- handle-prs-fetch-success! [response http-config]
   (swap! pull-requests-response-count inc)
-  (let [callback-no (deref pull-requests-response-count)]
+  (let [callback-no (deref pull-requests-response-count)
+        last-month-range (t/interval (:date-from http-config) (:date-to http-config))
+        filtered-pull-request (filter-pull-requests response last-month-range)]
     (debug "pull request callback no" callback-no)
-    (put-on-pull-requests-chan! response callback-no)
+    (put-on-pull-requests-chan! filtered-pull-request callback-no)
     (if (= callback-no 2)
       (close-pull-requests-chan! callback-no))))
 
@@ -47,12 +49,14 @@
   (debug http-config)
   (http/get (:pull-requests-url http-config)
             (:request-options http-config)
-            handle-prs-fetch-success!
+            (fn [response] (handle-prs-fetch-success! response http-config))
             handle-exception))
 
 (defn- build-pull-request-config [http-config query-params]
   {:pull-requests-url (-> http-config :url :pull-requests)
-   :request-options   (conj (:request-options http-config) query-params)})
+   :request-options   (conj (:request-options http-config) query-params)
+   :date-from         (:date-from http-config)
+   :date-to           (:date-to http-config)})
 
 (defn- fetch-pull-requests [http-config user-id]
   (let [http-configs [(build-pull-request-config http-config {:query-params {:status "All" :creatorId user-id}})
