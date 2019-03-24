@@ -5,7 +5,7 @@ A console app for delivering proof of working creatively to comply with Polish L
 
 ## Usage
     $ lein uberjar
-    $ java -jar artist-time-proof-0.2.0-standalone.jar [args]
+    $ java -jar artist-time-proof-0.3.0-standalone.jar [args]
 
 OR
 
@@ -13,7 +13,7 @@ OR
 
 [args] example
 
-    -u jondoe -p a**************************************************a -o microsoft -f "Jon Doe"
+    -u jondoe -p [AZURE-PASS] -o microsoft -f "Jon Doe" -F 2019-01-20 -T 2019-02-20
 
 Check --help for details
 

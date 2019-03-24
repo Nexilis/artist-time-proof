@@ -32,7 +32,7 @@
         (not (.contains % "@"))))
 
 ;; eg. 2019-11-01, future dates not allowed
-(spec/def ::past-date #(t/after? % (t/now)))
+(spec/def ::past-date #(t/after? (t/now) %))
 
 (def cli-options
   [["-u" "--user USER" "[REQUIRED] Azure authentication user, eg. jondoe"

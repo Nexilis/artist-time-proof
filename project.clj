@@ -1,4 +1,4 @@
-(defproject artist-time-proof "0.2.0"
+(defproject artist-time-proof "0.3.0"
   :description "A console app for delivering proof of working creatively to comply with Polish Labor Law."
   :url "https://github.com/Nexilis/artist-time-proof"
   :license {:name "GNU GENERAL PUBLIC LICENSE Version 3"
