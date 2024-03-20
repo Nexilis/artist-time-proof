@@ -5,7 +5,8 @@
    [cheshire.core :as json]
    [clj-http.client :as http]
    [clj-time.format :as f]
-   [clj-time.core :as t]))
+   [clj-time.core :as t]
+   [taoensso.timbre :as timbre]))
 
 (def pull-requests-chan (async/chan 2))
 (def pull-requests-response-count (atom 0))
@@ -36,7 +37,7 @@
   (http/get (:pull-requests-url pr-config)
             (:request-options pr-config)
             (fn [response] (handle-prs-fetch-success! response pr-config))
-            http-helper/handle-exception))
+            (fn [exception] (timbre/error exception))))
 
 (defn- pull-request-config [app-config query-params]
   {:pull-requests-url (-> app-config :url :pull-requests)
@@ -56,7 +57,7 @@
               (let [decoded-body (json/parse-string (:body response) true)
                     user-id (-> decoded-body :authenticatedUser :id)]
                 (deliver result-promise user-id)))
-            http-helper/handle-exception))
+            (fn [exception] (timbre/error exception))))
 
 (defn fetch [app-config]
   (let [user-id-promise (promise)]

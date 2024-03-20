@@ -1,8 +1,7 @@
 (ns artist-time-proof.http-helper
   (:require
    [cheshire.core :as json]
-   [clj-time.format :as f]
-   [taoensso.timbre :as timbre]))
+   [clj-time.format :as f]))
 
 (defn date->query-string [date]
   (f/unparse
@@ -10,6 +9,3 @@
 
 (defn extract-value-from [response]
   ((json/parse-string (:body response) true) :value))
-
-(defn handle-exception [exception]
-  (timbre/error exception))

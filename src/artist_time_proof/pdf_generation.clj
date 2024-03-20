@@ -5,8 +5,7 @@
    [clojure.core.async :as async :exclude [map into reduce merge take transduce partition partition-by]]
    [clj-time.core :as t]
    [clj-time.format :as f]
-   [clj-pdf.core :as pdf]
-   [taoensso.timbre :as timbre]))
+   [clj-pdf.core :as pdf]))
 
 (defn- build-pdf-base [full-name app-config]
   [{:title                  "Artist Time Proof"
@@ -106,6 +105,4 @@
                                    "Commits"
                                    commits/commits-chan
                                    accumulate-single-commit)]
-    (timbre/info "PDF generation START")
-    (time (pdf/pdf pdf-with-all pdf-file-name))
-    (timbre/info "PDF generation END")))
+    (pdf/pdf pdf-with-all pdf-file-name)))

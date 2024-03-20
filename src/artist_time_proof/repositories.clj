@@ -1,6 +1,5 @@
 (ns artist-time-proof.repositories
   (:require
-   [artist-time-proof.http-helper :as http-helper]
    [cheshire.core :as json]
    [clj-http.client :as http]
    [taoensso.timbre :as timbre]))
@@ -16,4 +15,4 @@
             (conj (:request-options app-config) {:query-params  {:includeLinks false}
                                                  :includeHidden true})
             (fn [response] (handle-fetch-success! response result-promise))
-            http-helper/handle-exception))
+            (fn [exception] (timbre/error exception))))
