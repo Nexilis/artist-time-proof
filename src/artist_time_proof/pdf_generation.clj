@@ -1,16 +1,12 @@
 (ns artist-time-proof.pdf-generation
   (:require
-    [artist-time-proof.pull-requests :refer :all]
-    [artist-time-proof.commits :refer :all]
-    [artist-time-proof.http :refer :all]
-    [clojure.core.async :refer :all :exclude [map into reduce merge take transduce partition partition-by]]
-    [clj-time.core :as t]
-    [clj-time.format :as f]
-    [clj-pdf.core :as pdf]
-    [taoensso.timbre :as timbre
-     :refer [log trace debug info warn error fatal report
-             logf tracef debugf infof warnf errorf fatalf reportf
-             spy get-env]]))
+   [artist-time-proof.pull-requests :as prs]
+   [artist-time-proof.commits :as commits]
+   [clojure.core.async :as async :exclude [map into reduce merge take transduce partition partition-by]]
+   [clj-time.core :as t]
+   [clj-time.format :as f]
+   [clj-pdf.core :as pdf]
+   [taoensso.timbre :as timbre]))
 
 (defn- build-pdf-base [full-name app-config]
   [{:title                  "Artist Time Proof"
@@ -28,8 +24,8 @@
    [:spacer]
    [:paragraph
     [:phrase {:size 12}
-     (str "For: " (f/unparse (f/formatters :date) (:date-to app-config))
-          " - " (f/unparse (f/formatters :date) (:date-from app-config)))]]
+     (str "Data for period from: " (f/unparse (f/formatters :date) (:date-from app-config))
+          " until: " (f/unparse (f/formatters :date) (:date-to app-config)))]]
    [:spacer 2]])
 
 (def pdf-file-name (str "artist-time-proof-" (f/unparse (f/formatters :date-time) (t/now)) ".pdf"))
@@ -39,12 +35,9 @@
 (defn- date-time->string [date-time]
   (f/unparse pdf-date-time-formatter (f/parse date-time)))
 
-(defn- take-or-timeout!! [channel channel-name]
-  "Takes data from a channel or timeouts after configured time."
-  (let [[take-result] (alts!! [channel (timeout 5000)])]
-    (if take-result
-      (debug "taken from" channel-name)
-      (debug "timeout or closed" channel-name))
+;; Takes data from a channel or timeouts after configured time.
+(defn- take-or-timeout!! [channel]
+  (let [[take-result] (async/alts!! [channel (async/timeout 5000)])]
     take-result))
 
 (defn- accumulate-single-commit [accumulator commit]
@@ -89,33 +82,30 @@
            [:phrase url]]
           [:spacer])))
 
-(defn- conj-chapter [pdf chapter-name source-chan chan-name accumulate-function]
+(defn- conj-chapter [pdf chapter-name source-chan accumulate-function]
   (loop [result (conj pdf [:paragraph {:size 20} chapter-name] [:line] [:spacer])]
-    (let [data-from-chan (take-or-timeout!! source-chan chan-name)]
+    (let [data-from-chan (take-or-timeout!! source-chan)]
       (if data-from-chan
         (let [updated-result
               (doall
-                (reduce
-                  (fn [accumulator x]
-                    (accumulate-function accumulator x))
-                  result
-                  data-from-chan))]
+               (reduce
+                (fn [accumulator x]
+                  (accumulate-function accumulator x))
+                result
+                data-from-chan))]
           (recur updated-result))
         result))))
 
-(defn present-results [full-name app-config]
+(defn generate-doc [full-name app-config]
   (let [pdf-base (build-pdf-base full-name app-config)
         pdf-with-prs (conj-chapter pdf-base
                                    "Pull Requests"
-                                   pull-requests-chan
-                                   (name `pull-requests-chan)
+                                   prs/pull-requests-chan
                                    accumulate-single-pull-request)
         pdf-with-all (conj-chapter pdf-with-prs
                                    "Commits"
-                                   commits-chan
-                                   (name `commits-chan)
+                                   commits/commits-chan
                                    accumulate-single-commit)]
-    (info "PDF generation START")
-    (debug pdf-with-all)
+    (timbre/info "PDF generation START")
     (time (pdf/pdf pdf-with-all pdf-file-name))
-    (info "PDF generation END")))
+    (timbre/info "PDF generation END")))
