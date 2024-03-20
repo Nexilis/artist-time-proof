@@ -3,11 +3,7 @@
             [clojure.tools.cli :as cli]
             [clojure.spec.alpha :as spec]
             [clj-time.format :as f]
-            [clj-time.core :as t]
-            [taoensso.timbre
-             :refer [log trace debug info warn error fatal report
-                     logf tracef debugf infof warnf errorf fatalf reportf
-                     spy get-env]]))
+            [clj-time.core :as t]))
 
 ;; eg. jondoe, emails not allowed
 (spec/def ::auth-user
@@ -85,8 +81,6 @@
 
 (defn process-args [args]
   (let [{:keys [options errors summary]} (cli/parse-opts args cli-options)]
-    (debug "CLI options" options)
-    (debug "CLI errors" errors)
     (cond
       (:help options) {:continue? false :errors? false :exit-message (usage summary)}
       errors {:continue? false :errors? true :exit-message (error-msg errors)}
